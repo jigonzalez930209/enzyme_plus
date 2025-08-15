@@ -1,0 +1,91 @@
+name: Release
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  draft_release:
+    permissions:
+      contents: write # Allows this job to create releases
+
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest] # Incluye ubuntu-latest para Linux
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node and NPM
+        uses: actions/setup-node@v4
+        with:
+          node-version: 23
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - run: pnpm install
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+
+      - name: Build
+        run: pnpm run build
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+          NODE_OPTIONS: "--max_old_space_size=4096"
+
+      - name: |
+          Compile artifacts to mac and upload them to github release
+        if: matrix.os == 'macos-latest'
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 15
+          max_attempts: 5
+          retry_wait_seconds: 15
+          retry_on: error
+          shell: "bash"
+          command: |
+            ./node_modules/.bin/electron-builder --mac --config --publish always
+
+        env:
+          GH_TOKEN: ${{ secrets.github_token }} # GitHub token, automatically provided
+
+      - name: |
+          Compile artifacts to windows and upload them to github release
+        if: matrix.os == 'windows-latest'
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 15
+          max_attempts: 5
+          retry_wait_seconds: 15
+          retry_on: error
+          shell: "bash"
+          command: |
+            ./node_modules/.bin/electron-builder --win --config --publish always
+
+        env:
+          GH_TOKEN: ${{ secrets.github_token }} # GitHub token, automatically provided
+
+      - name: |
+          Compile artifacts to linux and upload them to github release
+        if: matrix.os == 'ubuntu-latest'
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 15
+          max_attempts: 5
+          retry_wait_seconds: 15
+          retry_on: error
+          shell: "bash"
+          command: |
+            sudo apt install rpm && sudo snap install snapcraft --classic && ./node_modules/.bin/electron-builder --linux --config --publish always
+
+        env:
+          GH_TOKEN: ${{ secrets.github_token }} # GitHub token, automatically provided
