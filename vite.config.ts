@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => ({
   base:
     // Prioriza VITE_BASE si está definido (útil en CI para calcular automáticamente el nombre del repo)
     process.env.VITE_BASE ??
-    (mode === "production" && process.env.GITHUB_PAGES === "true"
+    (mode === "production" && !!process.env.GITHUB_PAGES
       ? "/enzyme_plus/"
       : "/"),
   resolve: {
