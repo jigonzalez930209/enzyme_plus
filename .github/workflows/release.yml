@@ -1,9 +1,8 @@
 name: Release
 on:
   push:
-    branches: [ main ]
-    paths:
-      - 'package.json'
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 concurrency:
@@ -45,37 +44,16 @@ jobs:
         uses: jetli/wasm-pack-action@v0.4.0
         with:
           version: latest
-
-      - name: Determine version change
-        id: version
-        run: |
-          set -e
-          CURRENT=$(node -p "require('./package.json').version")
-          if git rev-parse HEAD^ >/dev/null 2>&1; then
-            git show HEAD^:package.json > package_prev.json || echo '{}' > package_prev.json
-            PREV=$(node -p "JSON.parse(require('fs').readFileSync('package_prev.json','utf8')).version || ''")
-          else
-            PREV=""
-          fi
-          echo "current=$CURRENT" >> $GITHUB_OUTPUT
-          echo "prev=$PREV" >> $GITHUB_OUTPUT
-          if [ "$CURRENT" = "$PREV" ]; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-          else
-            echo "changed=true" >> $GITHUB_OUTPUT
-          fi
+      # Version check removed; releases are triggered by tags (v*)
 
       - run: pnpm install
-        if: steps.version.outputs.changed == 'true'
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 
       - name: Build WASM (release)
-        if: steps.version.outputs.changed == 'true'
         run: pnpm run wasm:build
 
       - name: Build
-        if: steps.version.outputs.changed == 'true'
         run: pnpm run build
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
@@ -96,11 +74,10 @@ jobs:
 
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHub token, automatically provided
-        if: steps.version.outputs.changed == 'true'
 
       - name: |
           Compile artifacts to windows and upload them to github release
-        if: matrix.os == 'windows-latest' && steps.version.outputs.changed == 'true'
+        if: matrix.os == 'windows-latest'
         uses: nick-fields/retry@v3
         with:
           timeout_minutes: 15
@@ -116,7 +93,7 @@ jobs:
 
       - name: |
           Compile artifacts to linux and upload them to github release
-        if: matrix.os == 'ubuntu-latest' && steps.version.outputs.changed == 'true'
+        if: matrix.os == 'ubuntu-latest'
         uses: nick-fields/retry@v3
         with:
           timeout_minutes: 15
