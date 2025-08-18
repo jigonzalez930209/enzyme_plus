@@ -28,10 +28,17 @@ Notes
 - If you ever need to force no publishing explicitly, append `--publish never` to the electron-builder command.
 
 Release builds (publish to GitHub Releases)
-- CI: Pushing to `main` triggers `.github/workflows/release.yml`, which:
-  - installs dependencies with pnpm,
-  - builds the app, and
-  - runs electron-builder on macOS, Windows, and Linux with `--publish always`.
+- CI: A push to `main` that modifies `package.json` triggers `.github/workflows/release.yml`. The workflow only proceeds if the `version` field actually changed vs. the previous commit (automatic check).
+  - Installs dependencies with pnpm
+  - Builds the WASM library (release) via `pnpm run wasm:build`
+  - Builds the app
+  - Runs electron-builder on macOS, Windows, and Linux with `--publish always`
+- How to trigger a release
+  - Bump the version in `package.json` and push to `main`:
+    - Using pnpm: `pnpm version patch` (or `minor`, `major`)
+    - Using npm: `npm version patch` (or `minor`, `major`)
+    - Or edit `package.json` manually and commit
+  - Alternatively, you can run the workflow manually from the Actions tab (it will still check if the version changed)
 - Local (optional): You can publish from your machine by running electron-builder with `--publish always` and exporting `GH_TOKEN` first.
   - Examples: `./node_modules/.bin/electron-builder --mac --publish always`, `--win`, or `--linux`
 
