@@ -1,9 +1,12 @@
-import {
-  simulateTick,
-  createStateFromNumbers,
-  type SimulationParams,
-} from "./precise-simulation";
+import type { SimulationParams } from "./precise-simulation";
 import type { SpeciesConcentrations } from "../state/useAppStore";
+import {
+  initWasm,
+  isWasmReady,
+  paramsToNumbers,
+  wasmSimulateStepsFinal,
+  wasmSimulateStepsSeries,
+} from "./wasm-sim";
 
 export interface SimulationStep {
   time: number;
@@ -24,6 +27,7 @@ export class SimulationEngine {
   private params: SimulationParams;
   private callback: SimulationCallback | null = null;
   private currentBatchSize = 1; // Number of calculations per batch
+  private firstTickDone = false; // Ensure the very first update advances exactly 1 dt
 
   constructor(
     initialConcentrations: SpeciesConcentrations,
@@ -56,6 +60,9 @@ export class SimulationEngine {
     if (this.isRunning) return;
 
     this.isRunning = true;
+    this.firstTickDone = false;
+    // Kick off WASM initialization in the background (non-blocking)
+    void initWasm();
     this.scheduleNextStep();
   }
 
@@ -125,6 +132,12 @@ export class SimulationEngine {
       calculationsPerBatch = Math.min(idealBatchSize, MAX_BATCH_SIZE);
     }
 
+    // Ensure the very first tick is exactly one dt to avoid initial time jump
+    if (!this.firstTickDone) {
+      calculationsPerBatch = 1;
+      actualInterval = Math.min(TARGET_INTERVAL, BATCH_THRESHOLD);
+    }
+
     // Store batch size for executeStep
     this.currentBatchSize = calculationsPerBatch;
 
@@ -134,7 +147,7 @@ export class SimulationEngine {
   }
 
   // Private method to execute simulation step(s) with intelligent batching
-  private executeStep() {
+  private async executeStep() {
     if (!this.isRunning) {
       return;
     }
@@ -143,66 +156,73 @@ export class SimulationEngine {
       // Get batch size (set by scheduleNextStep)
       const batchSize = this.currentBatchSize;
 
-      // Always use batch processing for consistent 60 FPS updates
-      if (batchSize <= 10) {
-        // Small batches: process directly without yield
-        const batchResults: SimulationStep[] = [];
+      // Ensure WASM is initialized; if not ready yet, wait and retry
+      if (!isWasmReady()) {
+        void initWasm();
+        // Try again shortly without advancing state
+        this.timerId = window.setTimeout(() => this.executeStep(), 10);
+        return;
+      }
 
-        for (let i = 0; i < batchSize; i++) {
-          if (!this.isRunning) break;
+      const paramsNum = paramsToNumbers(this.params);
+      const currentNum = {
+        E: this.currentState.E,
+        ES: this.currentState.ES,
+        EP: this.currentState.EP,
+        S: this.currentState.S,
+        P: this.currentState.P,
+        TIEMPO: this.currentTime,
+      };
 
-          const decimalState = createStateFromNumbers({
-            EL: this.currentState.E,
-            ES: this.currentState.ES,
-            EP: this.currentState.EP,
-            S: this.currentState.S,
-            P: this.currentState.P,
-            TIEMPO: this.currentTime,
-          });
-
-          const simulationParams = {
-            NEL: Math.round(this.currentState.E),
-            NES: Math.round(this.currentState.ES),
-            NEP: Math.round(this.currentState.EP),
-            NS: this.params.NS,
-            NP: this.params.NP,
-            k1: this.params.k1,
-            kMinus1: this.params.kMinus1,
-            k2: this.params.k2,
-            kMinus2: this.params.kMinus2,
-            k3: this.params.k3,
-            kMinus3: this.params.kMinus3,
-          };
-
-          const nextDecimal = simulateTick(decimalState, simulationParams);
-
-          this.currentState = {
-            E: nextDecimal.EL.toNumber(),
-            ES: nextDecimal.ES.toNumber(),
-            EP: nextDecimal.EP.toNumber(),
-            S: nextDecimal.S.toNumber(),
-            P: nextDecimal.P.toNumber(),
-          };
-          this.currentTime = nextDecimal.TIEMPO.toNumber();
-
-          // Add to batch results (only store final result for single calc)
-          if (batchSize === 1 || i === batchSize - 1) {
-            batchResults.push({
-              time: this.currentTime,
-              concentrations: { ...this.currentState },
-            });
-          }
+      if (batchSize === 1) {
+        // Single step: compute final only (WASM)
+        const final = await wasmSimulateStepsFinal(currentNum, paramsNum, batchSize);
+        if (!final) {
+          // If call failed unexpectedly, reschedule and retry
+          this.scheduleNextStep();
+          return;
         }
 
-        // Send results
-        if (this.callback && batchResults.length > 0) {
-          this.callback(batchSize === 1 ? batchResults[0] : batchResults);
+        this.currentState = {
+          E: final.E,
+          ES: final.ES,
+          EP: final.EP,
+          S: final.S,
+          P: final.P,
+        };
+        this.currentTime = final.TIEMPO;
+
+        if (this.callback) {
+          const step: SimulationStep = {
+            time: this.currentTime,
+            concentrations: { ...this.currentState },
+          };
+          this.callback(step);
         }
       } else {
-        // Large batches: use yield mechanism to prevent UI blocking
-        this.executeBatchWithYield(batchSize, 0, []);
-        return; // Exit here, batch will continue asynchronously
+        // Large batches: compute full series in WASM and emit array
+        const series = await wasmSimulateStepsSeries(currentNum, paramsNum, batchSize);
+        if (!series || series.length === 0) {
+          this.scheduleNextStep();
+          return;
+        }
+
+        const batchResults: SimulationStep[] = series.map((s) => ({
+          time: s.TIEMPO,
+          concentrations: { E: s.E, ES: s.ES, EP: s.EP, S: s.S, P: s.P },
+        }));
+
+        const last = series[series.length - 1];
+        this.currentState = { E: last.E, ES: last.ES, EP: last.EP, S: last.S, P: last.P };
+        this.currentTime = last.TIEMPO;
+
+        if (this.callback) {
+          this.callback(batchResults);
+        }
       }
+
+      // Mark first tick as completed after successfully advancing time
+      this.firstTickDone = true;
 
       // Schedule next batch
       this.scheduleNextStep();
@@ -214,73 +234,5 @@ export class SimulationEngine {
     }
   }
 
-  // Execute batch with yield mechanism to prevent UI blocking
-  private executeBatchWithYield(
-    totalBatchSize: number,
-    currentIndex: number,
-    batchResults: SimulationStep[]
-  ) {
-    if (!this.isRunning || currentIndex >= totalBatchSize) {
-      // Batch complete, send results
-      if (this.callback && batchResults.length > 0) {
-        this.callback(batchResults);
-      }
-      // Schedule next batch
-      this.scheduleNextStep();
-      return;
-    }
-
-    const YIELD_EVERY = 10; // Yield to UI every 10 calculations (more efficient)
-    const endIndex = Math.min(currentIndex + YIELD_EVERY, totalBatchSize);
-
-    // Process a small chunk of calculations
-    for (let i = currentIndex; i < endIndex; i++) {
-      if (!this.isRunning) break;
-
-      const decimalState = createStateFromNumbers({
-        EL: this.currentState.E,
-        ES: this.currentState.ES,
-        EP: this.currentState.EP,
-        S: this.currentState.S,
-        P: this.currentState.P,
-        TIEMPO: this.currentTime,
-      });
-
-      const simulationParams = {
-        NEL: Math.round(this.currentState.E),
-        NES: Math.round(this.currentState.ES),
-        NEP: Math.round(this.currentState.EP),
-        NS: this.params.NS,
-        NP: this.params.NP,
-        k1: this.params.k1,
-        kMinus1: this.params.kMinus1,
-        k2: this.params.k2,
-        kMinus2: this.params.kMinus2,
-        k3: this.params.k3,
-        kMinus3: this.params.kMinus3,
-      };
-
-      const nextDecimal = simulateTick(decimalState, simulationParams);
-
-      this.currentState = {
-        E: nextDecimal.EL.toNumber(),
-        ES: nextDecimal.ES.toNumber(),
-        EP: nextDecimal.EP.toNumber(),
-        S: nextDecimal.S.toNumber(),
-        P: nextDecimal.P.toNumber(),
-      };
-      this.currentTime = nextDecimal.TIEMPO.toNumber();
-
-      // Add this step to batch results
-      batchResults.push({
-        time: this.currentTime,
-        concentrations: { ...this.currentState },
-      });
-    }
-
-    // Yield to UI and continue with next chunk
-    setTimeout(() => {
-      this.executeBatchWithYield(totalBatchSize, endIndex, batchResults);
-    }, 0);
-  }
+  // All calculations are performed in WASM; no JS fallback needed.
 }

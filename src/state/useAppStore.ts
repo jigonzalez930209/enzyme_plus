@@ -95,6 +95,7 @@ const initialSimulation: SimulationData = {
     k2: new Decimal(0.1), // k(ES->EP) from reference image
     kMinus2: new Decimal(0.1), // k(EP->ES) from reference image
     k3: new Decimal(0.1), // k(EP->E + P) from reference image
+    dt: new Decimal(1), // default physical simulation step (seconds)
   },
   status: "stopped", // 'stopped', 'running', or 'paused'
   time: 0,

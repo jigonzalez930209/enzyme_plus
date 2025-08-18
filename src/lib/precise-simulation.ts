@@ -1,5 +1,67 @@
 import Decimal from 'decimal.js';
 
+// --- Random helpers (mirror WASM behavior) ---
+function randF64(): number {
+  return Math.random();
+}
+
+// Standard normal via Box-Muller
+function randStdNormal(): number {
+  let u1 = randF64();
+  let u2 = randF64();
+  if (u1 <= 1e-12) u1 = 1e-12;
+  if (u2 <= 1e-12) u2 = 1e-12;
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+// Poisson sampler (Knuth) for small lambda
+function samplePoisson(lambda: number): number {
+  if (lambda <= 0) return 0;
+  const l = Math.exp(-lambda);
+  let k = 0;
+  let p = 1.0;
+  do {
+    k += 1;
+    p *= randF64();
+  } while (p > l);
+  return k - 1;
+}
+
+// Binomial sampler with approximations matching WASM strategy
+function sampleBinomial(n: number, p: number): number {
+  const nn = Math.max(0, Math.floor(n));
+  let pp = Math.max(0, Math.min(1, p));
+  if (nn <= 0 || pp <= 0) return 0;
+  if (pp >= 1) return nn;
+
+  // Use symmetry to keep p <= 0.5
+  const mutate = pp > 0.5;
+  if (mutate) pp = 1 - pp;
+
+  const mean = nn * pp;
+  const variance = mean * (1 - pp);
+
+  let k: number;
+  if (nn < 50) {
+    // Direct Bernoulli sum for small n
+    let c = 0;
+    for (let i = 0; i < nn; i++) if (randF64() < pp) c += 1;
+    k = c;
+  } else if (mean < 30) {
+    // Poisson approximation
+    k = samplePoisson(mean);
+    if (k > nn) k = nn;
+  } else {
+    // Normal approximation
+    const z = randStdNormal();
+    k = Math.round(mean + z * Math.sqrt(variance));
+    if (k < 0) k = 0;
+    if (k > nn) k = nn;
+  }
+
+  return mutate ? nn - k : k;
+}
+
 
 /**
  * State of the simulation using high‑precision numbers.
@@ -45,6 +107,8 @@ export interface SimulationParams {
   kMinus2: Decimal;
   /** Rate constant for EP → E + P (k3) */
   k3: Decimal;
+  /** Time step size in seconds */
+  dt?: Decimal;
 }
 
 /**
@@ -72,6 +136,9 @@ export function simulateTick(
     TIEMPO: new Decimal(state.TIEMPO),
   };
   
+  // Time step (seconds). Default to 1 if not provided
+  const DT = params.dt ?? new Decimal(1);
+
   // Ensure all initial values are non-negative
   EL = Decimal.max(EL, new Decimal(0));
   ES = Decimal.max(ES, new Decimal(0));
@@ -79,85 +146,89 @@ export function simulateTick(
   S = Decimal.max(S, new Decimal(0));
   P = Decimal.max(P, new Decimal(0));
   
-  // Preserve the original counts – they are used as the "memory" values.
+  // Preserve the snapshot counts – they must be used for this dt (mirror WASM ordering)
   const NEL = params.NEL;
   const NES = params.NES;
   const NEP = params.NEP;
   
-  // Note: BASIC algorithm uses fixed NS and NP values, not current concentrations
-  
-  // ---------- Process free E molecules (NEL) ----------
-  for (let i = 0; i < NEL; i++) {
-    // Skip if there are no free E molecules left
-    if (EL.lessThanOrEqualTo(0)) break;
-    
-    const rnd = Decimal.random(); // 0 <= rnd < 1
-    
-    // Calculate thresholds based on BASIC algorithm
-    // Use current concentrations [S] and [P] as per theory: k1*[S] and k-3*[P]
-    const threshold1 = params.k1.times(S); // k1 * [S] (current substrate concentration)
-    const threshold2 = threshold1.plus(params.kMinus3.times(P)); // k1*[S] + k-3*[P] (current product concentration)
-    
-    if (rnd.lte(threshold1) && S.greaterThan(0)) {
-      // E + S → ES
-      EL = EL.minus(1);
-      ES = ES.plus(1);
-      S = S.minus(1);
-    } else if (rnd.lte(threshold2) && P.greaterThan(0)) {
-      // E + P → EP  
-      EL = EL.minus(1);
-      EP = EP.plus(1);
-      P = P.minus(1);
+  // ---------- Process free E molecules (aggregated, with resource capping and overflow reassignment) ----------
+  {
+    // Use snapshot NEL, not current EL after any updates
+    const nel = Math.max(0, Math.round(NEL));
+    const lambda1 = Math.max(0, params.k1.toNumber() * Math.max(0, S.toNumber()));
+    const lambda2 = Math.max(0, params.kMinus3.toNumber() * Math.max(0, P.toNumber()));
+    const lambdaSum = lambda1 + lambda2;
+    const dtNum = DT.isFinite() && DT.greaterThan(0) ? DT.toNumber() : 1;
+    const pTot = lambdaSum > 0 ? 1 - Math.exp(-lambdaSum * dtNum) : 0;
+    const nReact = sampleBinomial(nel, pTot);
+    const frac1 = lambdaSum > 0 ? Math.max(0, Math.min(1, lambda1 / lambdaSum)) : 0;
+    const nEsRaw = sampleBinomial(nReact, frac1);
+    const nEpRaw = nReact - nEsRaw;
+
+    // Cap by available S/P and reassign overflow symmetrically (like WASM)
+    const sAvail = Math.max(0, Math.floor(S.toNumber()));
+    const pAvail = Math.max(0, Math.floor(P.toNumber()));
+    let nEs = Math.min(nEsRaw, sAvail);
+    let nEp = Math.min(nEpRaw, pAvail);
+    const sLeft = sAvail - nEs;
+    const pLeft = pAvail - nEp;
+    const overflowEs = nEsRaw - nEs; // ES wanted but no S
+    const overflowEp = nEpRaw - nEp; // EP wanted but no P
+    if (overflowEs > 0 && pLeft > 0) {
+      const add = Math.min(overflowEs, pLeft);
+      nEp += add;
     }
-    // else: no reaction, molecule stays as E (nothing to do)
+    if (overflowEp > 0 && sLeft > 0) {
+      const add = Math.min(overflowEp, sLeft);
+      nEs += add;
+    }
+
+    // Apply updates
+    EL = EL.minus(nEs + nEp);
+    ES = ES.plus(nEs);
+    EP = EP.plus(nEp);
+    S = S.minus(nEs);
+    P = P.minus(nEp);
   }
 
-  // ---------- Process ES complexes (NES) ----------
-  for (let i = 0; i < NES; i++) {
-    // Skip if there are no ES complexes left
-    if (ES.lessThanOrEqualTo(0)) break;
-    
-    const rnd = Decimal.random();
-    
-    // Calculate thresholds based on BASIC algorithm
-    const threshold1 = params.kMinus1; // k-1
-    const threshold2 = threshold1.plus(params.k2); // k-1 + k2
-    
-    if (rnd.lte(threshold1)) {
-      // ES → E + S (reverse reaction)
-      EL = EL.plus(1);
-      ES = ES.minus(1);
-      S = S.plus(1);
-    } else if (rnd.lte(threshold2)) {
-      // ES → EP (forward reaction)
-      EP = EP.plus(1);
-      ES = ES.minus(1);
-      // Note: Substrate was already consumed when ES was formed
-      // Product is NOT generated here - it's generated when EP → E + P
-    }
+  // ---------- Process ES complexes (aggregated competing-risks) ----------
+  {
+    // Use snapshot NES, not current ES after E-updates
+    const nes = Math.max(0, Math.round(NES));
+    const lambdaBack = Math.max(0, params.kMinus1.toNumber());
+    const lambdaFwd = Math.max(0, params.k2.toNumber());
+    const lambdaSum = lambdaBack + lambdaFwd;
+    const dtNum = DT.isFinite() && DT.greaterThan(0) ? DT.toNumber() : 1;
+    const pTot = lambdaSum > 0 ? 1 - Math.exp(-lambdaSum * dtNum) : 0;
+    const nReact = sampleBinomial(nes, pTot);
+    const fracBack = lambdaSum > 0 ? Math.max(0, Math.min(1, lambdaBack / lambdaSum)) : 0;
+    const toEL = sampleBinomial(nReact, fracBack);
+    const toEP = nReact - toEL;
+
+    EL = EL.plus(toEL);
+    ES = ES.minus(toEL + toEP);
+    S = S.plus(toEL);
+    EP = EP.plus(toEP);
   }
 
-  // ---------- Process EP complexes (NEP) ----------
-  for (let i = 0; i < NEP; i++) {
-    // Skip if there are no EP complexes left
-    if (EP.lessThanOrEqualTo(0)) break;
-    
-    const rnd = Decimal.random();
-    
-    // Calculate thresholds based on BASIC algorithm
-    const threshold1 = params.kMinus2; // k-2
-    const threshold2 = threshold1.plus(params.k3); // k-2 + k3
-    
-    if (rnd.lte(threshold1)) {
-      // EP → ES (reverse reaction)
-      ES = ES.plus(1);
-      EP = EP.minus(1);
-    } else if (rnd.lte(threshold2)) {
-      // EP → E + P (product formation)
-      EL = EL.plus(1);
-      EP = EP.minus(1);
-      P = P.plus(1); // Product is generated here!
-    }
+  // ---------- Process EP complexes (aggregated competing-risks) ----------
+  {
+    // Use snapshot NEP, not current EP after E/ES updates
+    const nep = Math.max(0, Math.round(NEP));
+    const lambdaBack = Math.max(0, params.kMinus2.toNumber());
+    const lambdaFwd = Math.max(0, params.k3.toNumber());
+    const lambdaSum = lambdaBack + lambdaFwd;
+    const dtNum = DT.isFinite() && DT.greaterThan(0) ? DT.toNumber() : 1;
+    const pTot = lambdaSum > 0 ? 1 - Math.exp(-lambdaSum * dtNum) : 0;
+    const nReact = sampleBinomial(nep, pTot);
+    const fracBack = lambdaSum > 0 ? Math.max(0, Math.min(1, lambdaBack / lambdaSum)) : 0;
+    const toES = sampleBinomial(nReact, fracBack);
+    const toE = nReact - toES;
+
+    ES = ES.plus(toES);
+    EP = EP.minus(toES + toE);
+    EL = EL.plus(toE);
+    P = P.plus(toE);
   }
 
   // Final safety check: ensure no negative values
@@ -167,8 +238,8 @@ export function simulateTick(
   S = Decimal.max(S, new Decimal(0));
   P = Decimal.max(P, new Decimal(0));
 
-  // Increment time
-  TIEMPO = TIEMPO.plus(1);
+  // Increment time by dt
+  TIEMPO = TIEMPO.plus(DT);
 
   // Return a fresh immutable state object.
   return {

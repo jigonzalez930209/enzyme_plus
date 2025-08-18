@@ -1,9 +1,10 @@
 import { useSimulationState, useSimulationActions } from "@/state/useAppStore";
 import React from "react";
+import Decimal from "decimal.js";
 
 export function SimulationController() {
   const simulation = useSimulationState();
-  const { setSpeed } = useSimulationActions();
+  const { setSpeed, setParams } = useSimulationActions();
 
   // Convert speed to logarithmic slider value (0-100)
   // Speed range: 0.01 to 10,000 (log scale) - optimized for fluid simulation
@@ -26,6 +27,34 @@ export function SimulationController() {
     const sliderValue = parseFloat(event.target.value);
     const newSpeed = sliderToSpeed(sliderValue);
     setSpeed(newSpeed);
+  };
+
+  // dt slider (log scale between 1ms and 10s)
+  const dtToSlider = (dt: number) => {
+    const logMin = Math.log10(0.001); // 1 ms
+    const logMax = Math.log10(10); // 10 s
+    const logDt = Math.log10(Math.max(0.001, Math.min(10, dt)));
+    return ((logDt - logMin) / (logMax - logMin)) * 100;
+  };
+
+  const sliderToDt = (sliderValue: number) => {
+    const logMin = Math.log10(0.001);
+    const logMax = Math.log10(10);
+    const logDt = logMin + (sliderValue / 100) * (logMax - logMin);
+    return Math.pow(10, logDt);
+  };
+
+  const formatDt = (dt: number) => {
+    if (dt < 0.01) return `${(dt * 1000).toFixed(1)} ms`;
+    if (dt < 1) return `${(dt * 1000).toFixed(0)} ms`;
+    if (dt < 10) return `${dt.toFixed(2)} s`;
+    return `${dt.toFixed(1)} s`;
+  };
+
+  const handleDtChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const sliderValue = parseFloat(event.target.value);
+    const newDt = sliderToDt(sliderValue);
+    setParams({ dt: new Decimal(newDt) });
   };
 
   return (
@@ -84,6 +113,36 @@ export function SimulationController() {
           <label className="w-8 text-xs">Time:</label>
           <div className="flex items-center flex-1 h-4 px-1 py-0 text-xs border rounded">
             {Math.round(simulation.time)}
+          </div>
+        </div>
+      </div>
+
+      {/* dt Control */}
+      <div className="pt-1 mt-2 border-t border-gray-300">
+        <div className="space-y-1">
+          <div className="flex items-center gap-1">
+            <label className="w-12 text-xs">dt:</label>
+            <div className="flex items-center flex-1 h-4 px-1 py-0 text-xs border rounded">
+              {formatDt(Number(simulation.params.dt?.toNumber?.() ?? simulation.params.dt ?? 1))}
+            </div>
+          </div>
+          <div className="px-1">
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="0.1"
+              value={dtToSlider(Number(simulation.params.dt?.toNumber?.() ?? simulation.params.dt ?? 1))}
+              onChange={handleDtChange}
+              className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+            />
+            <div className="flex items-center justify-between mt-1 text-xs text-center text-gray-500">
+              <span className="w-10">1 ms</span>
+              <span className="w-10">10 ms</span>
+              <span className="w-10">100 ms</span>
+              <span className="w-10">1 s</span>
+              <span className="w-10">10 s</span>
+            </div>
           </div>
         </div>
       </div>
