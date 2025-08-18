@@ -1,7 +1,7 @@
 {
   "name": "enzyme_plus",
   "private": false,
-  "version": "0.0.1",
+  "version": "0.1.0",
   "type": "module",
   "author": {
     "name":"José Iván González Jorge", 
@@ -92,7 +92,9 @@
     "build:win": "pnpm run build && electron-builder --win",
     "build:mac": "electron-vite build && electron-builder --mac",
     "build:linux": "electron-vite build && electron-builder --linux",
-    "build:gh-pages": "GITHUB_PAGES=1 electron-vite build"
+    "build:gh-pages": "GITHUB_PAGES=1 electron-vite build",
+    "wasm:build": "wasm-pack build wasm --release --target web --out-dir ../src/wasm --out-name enzyme_sim",
+    "wasm:dev": "wasm-pack build wasm --dev --target web --out-dir ../src/wasm --out-name enzyme_sim"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",
