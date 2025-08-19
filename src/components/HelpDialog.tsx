@@ -262,8 +262,8 @@ export default function HelpDialog() {
             </Button>
           </AlertDialogCancel>
         </AlertDialogHeader>
-        <div className="grid h-full grid-cols-1 md:grid-cols-[220px_1fr]">
-          <aside className="h-[calc(85vh)] p-4 grid grid-rows-[1fr_auto]  overflow-y-auto border-r bg-muted/40 md:p-6">
+        <div className="grid h-full grid-cols-1 md:grid-cols-[20%_80%]">
+          <aside className="h-[calc(85vh)] p-4 grid grid-rows-[auto_1fr]  overflow-y-auto border-r bg-muted/40 md:p-6">
             <div className="mb-3 text-xs font-semibold text-muted-foreground">
               Ayuda
             </div>
@@ -291,7 +291,7 @@ export default function HelpDialog() {
               </MDXProvider>
             </div>
             <footer className="p-4 text-xs text-muted-foreground">
-              <p>Enzyme Plus v0.1.1</p>
+              <p>Enzyme Plus v0.2.3</p>
             </footer>
           </main>
         </div>

@@ -31,9 +31,23 @@ export const PlotComponent = React.forwardRef<HTMLDivElement, PlotProps>(
       return () => observer.disconnect();
     }, []);
 
-    // Create plot data directly from simulation history
+    // Slice history when paused to show data up to scrubIndex
+    const historyForPlot = React.useMemo(() => {
+      const idx = simulation.scrubIndex;
+      if (
+        simulation.status === "paused" &&
+        idx != null &&
+        idx >= 0 &&
+        simulation.history.length > 0
+      ) {
+        return simulation.history.slice(0, Math.min(idx + 1, simulation.history.length));
+      }
+      return simulation.history;
+    }, [simulation.status, simulation.scrubIndex, simulation.history]);
+
+    // Create plot data from derived history
     const plotData = React.useMemo(() => {
-      if (simulation.history.length === 0) {
+      if (historyForPlot.length === 0) {
         return [];
       }
 
@@ -47,8 +61,8 @@ export const PlotComponent = React.forwardRef<HTMLDivElement, PlotProps>(
       };
 
       const data = species.map((speciesName) => {
-        const x = simulation.history.map((h) => h.time);
-        const y = simulation.history.map(
+        const x = historyForPlot.map((h) => h.time);
+        const y = historyForPlot.map(
           (h) => h.concentrations[speciesName as keyof typeof h.concentrations]
         );
 
@@ -66,7 +80,7 @@ export const PlotComponent = React.forwardRef<HTMLDivElement, PlotProps>(
       });
 
       return data;
-    }, [simulation.history]);
+    }, [historyForPlot]);
 
     const layout = React.useMemo(
       () => ({
@@ -76,7 +90,7 @@ export const PlotComponent = React.forwardRef<HTMLDivElement, PlotProps>(
         },
         xaxis: {
           title: {
-            text: "Time",
+            text: "Tiempo",
             font: {
               color: isDark ? "#e2e8f0" : "#1e293b",
             },
@@ -86,7 +100,7 @@ export const PlotComponent = React.forwardRef<HTMLDivElement, PlotProps>(
         },
         yaxis: {
           title: {
-            text: "Concentration",
+            text: "Concentración",
             font: {
               color: isDark ? "#e2e8f0" : "#1e293b",
             },

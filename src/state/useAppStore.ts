@@ -50,6 +50,7 @@ export type SimulationData = {
   concentrations: SpeciesConcentrations;
   history: ConcentrationHistory;
   speed: number; // Simulation speed multiplier (0.0001 to 1000)
+  scrubIndex: number | null; // When paused, which index of history is being viewed
 };
 export type SimulationActions = {
   setParams: (params: Partial<SimulationParams>) => void;
@@ -60,6 +61,7 @@ export type SimulationActions = {
     time: number;
     concentrations: SimulationData["concentrations"];
   }) => void;
+  setScrubIndex: (idx: number | null) => void;
 };
 
 // App State
@@ -108,6 +110,7 @@ const initialSimulation: SimulationData = {
   },
   history: [],
   speed: 1.0, // Default simulation speed (1x)
+  scrubIndex: null,
 };
 
 // Store hooks will be defined after store creation
@@ -177,22 +180,31 @@ const store = (
                 concentrations: state.simulation.concentrations,
               },
             ],
+            scrubIndex: null,
           },
         }));
       } else if (status === "running" && currentStatus === "paused") {
         // Resuming from pause - just change status, keep history intact
         set((state: AppState) => ({
-          simulation: { ...state.simulation, status },
+          simulation: { ...state.simulation, status, scrubIndex: null },
         }));
       } else if (status === "paused" && currentStatus === "running") {
         // Pausing a running simulation
         set((state: AppState) => ({
-          simulation: { ...state.simulation, status },
+          simulation: {
+            ...state.simulation,
+            status,
+            // Default scrub position at the latest point when entering pause
+            scrubIndex:
+              state.simulation.history.length > 0
+                ? state.simulation.history.length - 1
+                : null,
+          },
         }));
       } else {
         // Default case (including stop)
         set((state: AppState) => ({
-          simulation: { ...state.simulation, status },
+          simulation: { ...state.simulation, status, scrubIndex: null },
         }));
       }
     },
@@ -232,6 +244,10 @@ const store = (
           concentrations: step.concentrations,
           history: [...state.simulation.history, step],
         },
+      })),
+    setScrubIndex: (idx: number | null) =>
+      set((state: AppState) => ({
+        simulation: { ...state.simulation, scrubIndex: idx },
       })),
   },
 });
@@ -297,8 +313,8 @@ export const usePlotActions = () => {
 export const useSimulationState = () => useAppStore((s) => s.simulation);
 
 export const useSimulationActions = () => {
-  const { setParams, setStatus, setSpeed, resetSimulation, runStep } = useAppStore(
+  const { setParams, setStatus, setSpeed, resetSimulation, runStep, setScrubIndex } = useAppStore(
     (s) => s.simulation
   );
-  return { setParams, setStatus, setSpeed, resetSimulation, runStep };
+  return { setParams, setStatus, setSpeed, resetSimulation, runStep, setScrubIndex };
 };

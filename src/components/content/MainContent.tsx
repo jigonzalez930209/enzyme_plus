@@ -31,7 +31,7 @@ function ClientOnly({ children }: { children: React.ReactNode }) {
   if (!hasHydrated) {
     return (
       <div className="flex items-center justify-center w-full h-full">
-        Loading Simulation...
+        Cargando simulación...
       </div>
     );
   }
@@ -163,10 +163,10 @@ export function MainContent() {
               }`}
               title={
                 simulation.status === "running"
-                  ? "Pause simulation"
+                  ? "Pausar simulación"
                   : simulation.status === "paused"
-                  ? "Resume simulation"
-                  : "Simulation stopped"
+                  ? "Reanudar simulación"
+                  : "Simulación detenida"
               }
             >
               {simulation.status === "running" ? (
@@ -185,21 +185,23 @@ export function MainContent() {
           </div>
           <div className="p-3 border rounded border-border bg-card">
             <h3 className="mb-3 text-sm font-semibold text-foreground">
-              Initial Values
+              Valores iniciales
             </h3>
             <KineticsForm />
           </div>
 
           <div className="p-3 border rounded border-border bg-card">
             <h3 className="mb-3 text-sm font-semibold text-foreground">
-              Present values
+              Valores actuales
             </h3>
             <SimulationController />
           </div>
         </div>
 
-        <div className="flex-1 border bg-background border-border">
-          <PlotComponent />
+        <div className="flex flex-col flex-1 border bg-background border-border">
+          <div className="flex-1 min-h-0">
+            <PlotComponent className="h-full" />
+          </div>
         </div>
       </div>
     </ClientOnly>

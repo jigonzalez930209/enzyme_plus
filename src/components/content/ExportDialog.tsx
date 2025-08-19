@@ -36,9 +36,9 @@ const ExportDialog = ({
           title={
             simulation.status === "paused"
               ? simulation.history.length > 0
-                ? "Save current history"
-                : "No data to save yet"
-              : "Save is available only when paused"
+                ? "Guardar historial actual"
+                : "Aún no hay datos para guardar"
+              : "Guardar está disponible solo cuando está en pausa"
           }
         >
           <SaveIcon className="w-8 h-8" />
@@ -47,7 +47,7 @@ const ExportDialog = ({
       <AlertDialogContent>
         <AlertDialogHeader className="">
           <AlertDialogTitle className="mb-2 text-sm text-foreground">
-            Export data
+            Exportar datos
           </AlertDialogTitle>
           <AlertDialogDescription className="mb-3 text-xs text-muted-foreground">
             Elige el formato para exportar la simulación actual.
@@ -63,7 +63,7 @@ const ExportDialog = ({
             variant="default"
             className="w-full text-white bg-emerald-500 hover:bg-emerald-600"
           >
-            Exportar como CSV
+            Exportar como TSV
           </Button>
           <Button
             onClick={() => {
