@@ -1,0 +1,134 @@
+# Justificación técnica de las optimizaciones (del rulo For-Next a WASM)
+
+Este documento explica por qué y cómo reemplazamos el algoritmo original tipo “For-Next por molécula” (Tabla 3 del programa ENZYMA.EXE) por un método agregado y vectorizado, ejecutado en WebAssembly (Rust), sin perder fidelidad estadística ni violar conservación de masa. Se citan módulos reales del repositorio para trazabilidad.
+
+- Código actual relevante:
+  - `src/lib/precise-simulation.ts` — implementación canónica en TS del paso discreto: `simulateTick()`.
+  - `src/lib/wasm-sim.ts` — wrapper hacia WASM: `wasmSimulateStepsFinal()` y `wasmSimulateStepsSeries()`.
+  - `src/lib/simulation-engine.ts` — orquestación: batching, temporización y primer tick exacto.
+  - `src/state/simulationSlice.ts` — tipos y parámetros compartidos.
+
+---
+
+## 1) Resumen del algoritmo original (Tabla 3, ENZYMA.EXE)
+
+En cada paso de tiempo, usando “instantáneas” (conteos fijos durante el paso):
+
+- Para `rep = 1..NEL` (cada molécula libre `E`):
+  - Generar `Rnd`.
+  - Si `Rnd <= k1 * NS`: hacer `E+S→ES` (consumir 1 de `E` y `S`, sumar 1 a `ES`).
+  - Sino, si `Rnd <= k1 * NS + k-3 * NP`: hacer `E+P→EP` (consumir 1 de `E` y `P`, sumar 1 a `EP`).
+  - Sino, no reacciona.
+- Para `rep = 1..NES` (cada complejo `ES`):
+  - Si `Rnd <= k-1`: `ES→E+S`. Sino si `Rnd <= k-1 + k2`: `ES→EP`.
+- Para `rep = 1..NEP` (cada complejo `EP`):
+  - Si `Rnd <= k-2`: `EP→ES`. Sino si `Rnd <= k-2 + k3`: `EP→E+P`.
+- Incrementar tiempo en 1 (o el `dt` correspondiente).
+
+Este enfoque es correcto pero cuesta O(número de moléculas) por tick y ejerce mucha presión sobre la UI.
+
+---
+
+## 2) Enfoque actual: agregación por riesgos competitivos
+
+Reemplazamos los bucles por molécula por muestreos binomiales/multinomiales a nivel de especie (vectorización estocástica), manteniendo un `dt` fijo por tick y usando “instantáneas” de los conteos que no cambian dentro del mismo tick.
+
+- Implementación de referencia: `simulateTick()` en `src/lib/precise-simulation.ts`.
+- Ejecución de alta performance: `src/lib/wasm-sim.ts` exporta `simulate_steps_final/series` (Rust/WASM) invocadas desde `src/lib/simulation-engine.ts`.
+
+---
+
+## 3) Derivación probabilística (equivalencia con For-Next)
+
+Para el bloque de moléculas libres `E`:
+
+- Tasas instantáneas (hazard rates) durante el tick:
+  - `λ1 = k1 · S` para `E+S→ES`
+  - `λ2 = k−3 · P` para `E+P→EP`
+  - `λΣ = λ1 + λ2`
+- Probabilidad de que una molécula `E` reaccione en el intervalo `dt` (proceso de Poisson):
+  - `pTot = 1 − exp(−λΣ · dt)`
+- Número total que reacciona: `nReact ~ Binomial(NEL, pTot)`.
+- Partición entre vías competitivas por fracción de riesgo:
+  - `frac_ES = λ1/λΣ`, `nES ~ Binomial(nReact, frac_ES)`, `nEP = nReact − nES`.
+
+Esto es estadísticamente equivalente a ejecutar `NEL` ensayos Bernoulli independientes con dos umbrales (el For-Next). El cierre del binomial/multinomial garantiza que “sumar muchos Bernoulli idénticos” o “muestrear una vez un binomial y luego repartir por fracciones” producen la misma distribución.
+
+Para `ES` y `EP`, se repite el patrón de riesgos competitivos:
+
+- `ES`: `λback = k−1`, `λfwd = k2`, `pTot = 1 − exp(−(λback+λfwd)·dt)`, partición por `λback/(λback+λfwd)`.
+- `EP`: `λback = k−2`, `λfwd = k3`, análogo.
+
+Referencias en el código: bloques “Process free E molecules”, “Process ES complexes”, “Process EP complexes” en `simulateTick()`.
+
+---
+
+## 4) Instantáneas, consumo de recursos y reasignación
+
+- Se “congelan” `NEL`, `NES`, `NEP` al inicio del tick (snapshot), tal como hacía el VB con sus memorias. Ver `simulateTick()`.
+- Al aplicar `nES` y `nEP` se capan por recursos disponibles (`S` y `P`) y se realiza una __reasignación simétrica del excedente__ a la otra vía si hay recurso disponible. Esto replica el efecto del bucle secuencial que consume `S`/`P` en el camino:
+  - Si faltó `S` para todo el `E→ES` deseado pero aún hay `P`, parte del excedente migra a `E→EP` (y viceversa). Ver “Cap by available S/P and reassign overflow” en `simulateTick()`.
+- Se garantizan __no negatividad__ y __conservación de masa__ al final del tick.
+
+Resultado: los conteos finales concuerdan con lo que obtendría el For-Next tras consumir/competir por recursos dentro del paso.
+
+---
+
+## 5) Tratamiento riguroso de `dt` y batching
+
+- `dt` se integra de extremo a extremo: UI → store → WASM. Ver `paramsToNumbers()` en `src/lib/wasm-sim.ts`.
+- Cada tick incrementa exactamente `TIEMPO += dt` (`simulateTick()` y retorno de WASM). En el motor (`src/lib/simulation-engine.ts`):
+  - El __primer tick__ fuerza un único paso (`firstTickDone`) para evitar saltos iniciales.
+  - A velocidades altas, se agrupan N pasos por lote (batch), pero cada subpaso sigue siendo un `dt` físico. Las funciones WASM `simulate_steps_series` devuelven la serie completa de estados para mantener coherencia temporal.
+- La fórmula `pTot = 1 − exp(−λ·dt)` mantiene la probabilidad en [0,1] y es estable para rangos amplios de `dt`.
+
+Interpretación: con `dt` pequeño la dinámica se acerca a SSA/gillespie paso a paso; con `dt` mayor actúa como un “tau-leap” con control de probabilidades y competencia de riesgos.
+
+---
+
+## 6) Por qué no se pierde fidelidad
+
+- __Equivalencia estadística__: el reemplazo Bernoulli→Binomial/Multinomial es canónico para ensayos independientes con idénticos parámetros en un mismo `dt`.
+- __Riesgos competitivos__: el reparto por fracciones `λ/λΣ` reproduce exactamente el ordenamiento por umbrales del For-Next.
+- __Recursos y conservación__: el tope por `S`/`P` y la reasignación del excedente emulan la competencia y evitan sobreconsumo; la no negatividad está garantizada.
+- __Consistencia en el tiempo__: cada subpaso avanza un único `dt`; el batching no “interpela” la física, sólo la cadencia de actualización visual.
+
+---
+
+## 7) Rendimiento y arquitectura
+
+- __Complejidad__: O(1) por especie y tick (en lugar de O(#moléculas)).
+- __WASM-only__: todo el cálculo pasa por `wasmSimulateStepsFinal/Series` (Rust). Si el módulo no está listo, el motor reintenta sin avanzar estado (`initWasm()`, `isWasmReady()`), evitando rutas JS paralelas.
+- __UI fluida__: el motor fija una cadencia de ~50 FPS y adapta el tamaño de lote; la primera actualización es de un solo `dt` para estabilidad visual.
+
+Archivos:
+- `src/lib/simulation-engine.ts` — `scheduleNextStep()`, `executeStep()` y control de batches.
+- `src/lib/wasm-sim.ts` — inicialización dinámica, paso de `dt`, y parseo de series.
+- `src/lib/precise-simulation.ts` — referencia algorítmica exacta.
+
+---
+
+## 8) Notas sobre `NS`/`NP`
+
+El VB usaba `NS` y `NP` congelados explícitamente. En nuestra implementación, las tasas usan `S` y `P` de la instantánea del estado al inicio del bloque y se capan/redistribuyen reacciones respetando disponibilidad. En `paramsToNumbers()` se aceptan `NS`/`NP` por compatibilidad, pero el cálculo efectivo opera sobre `S`/`P` del estado del tick, lo que resulta operacionalmente equivalente bajo este esquema.
+
+---
+
+## 9) Recomendaciones prácticas de `dt`
+
+- __Régimen rápido__ (tasas altas o sustratos abundantes): usar `dt` pequeño para mayor fidelidad temporal.
+- __Régimen lento__ o exploración macroscópica: `dt` mayor acelera sin perder tendencias, gracias a `pTot` bien condicionado.
+- Ajustar `dt` con el control de la interfaz (escala logarítmica). La “velocidad” del motor afecta únicamente la cadencia de actualización y el tamaño de lote, no la física del modelo.
+
+---
+
+## 10) Validación sugerida
+
+- Comparar trayectorias de For-Next (a baja escala) vs. agregado/WASM con mismos `dt` y semillas, verificando medias y varianzas por especie.
+- Tests de conservación de masa/no negatividad y monotonicidad donde aplique (p.ej., consumo de sustratos bajo tasas netas positivas).
+
+---
+
+## 11) Conclusión
+
+La sustitución del bucle por molécula por un muestreo agregado de riesgos competitivos preserva la fidelidad estadística y la conservación, al tiempo que reduce drásticamente la complejidad computacional. Ejecutar este esquema en WASM y orquestarlo con batching ofrece rendimiento interactivo sin comprometer la validez del modelo.

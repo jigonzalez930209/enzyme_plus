@@ -18,13 +18,17 @@ import Bosquejo from "@/content/help/30-bosquejo-tecnica.mdx";
 import ComoFunciona from "@/content/help/31-como-funciona-aplicacion.mdx";
 import ValoresPantalla from "@/content/help/32-valores-en-pantalla.mdx";
 import AlgoritmoDiagramas from "@/content/help/33-algoritmo-y-diagramas.mdx";
-import PorQueOpt from "@/content/help/34-por-que-optimizaciones.mdx";
+import PorQueOpt from "@/content/help/35-justificacion-optimizaciones.mdx";
 import DiagramGeneral from "@/content/help/11-diagrama-general.mdx";
 import DiagramPasos from "@/content/help/17-diagrama-pasos.mdx";
 import SaltoTau from "@/content/help/13-salto-tau.mdx";
 import Bloques from "@/content/help/14-bloques-detalle.mdx";
 import UmbralesLineales from "@/content/help/12-umbrales-lineales.mdx";
 import AlgoritmoYNota from "@/content/help/10-algoritmos-resumen-y-notacion.mdx";
+import Optimizaciones from "@/content/help/18-optimizaciones.mdx";
+import Validacion from "@/content/help/19-consejos-validacion.mdx";
+import Compatibilidad from "@/content/help/20-compatibilidad-funciones.mdx";
+import Pistas from "@/content/help/16-pistas-implementacion.mdx";
 
 type Section = {
   id: string;
@@ -136,6 +140,7 @@ export default function HelpDialog() {
   );
   const helpSections = useMemo<Section[]>(
     () => [
+      // Introducción y uso de la app
       {
         id: "bosquejo",
         label: "Bosquejo general de la técnica",
@@ -151,45 +156,75 @@ export default function HelpDialog() {
         label: "Valores en pantalla",
         component: ValoresPantalla,
       },
+
+      // Modelo y algoritmos
       {
         id: "algoritmo-y-notacion",
-        label: "Algoritmo y notación",
+        label: "Algoritmos: resumen y notación",
         component: AlgoritmoYNota,
       },
       {
-        id: "algoritmo",
-        label: "Algoritmo y diagramas",
-        component: AlgoritmoDiagramas,
-      },
-      {
-        id: "bloques",
-        label: "Bloques",
-        component: Bloques,
-      },
-      {
-        id: "diagrama_general",
-        label: "Diagrama general",
-        component: DiagramGeneral,
-      },
-      {
-        id: "diagrama_pasos",
-        label: "Diagrama de pasos",
-        component: DiagramPasos,
-      },
-      {
         id: "umbrales-lineales",
-        label: "Umbrales lineales",
+        label: "A) Umbrales lineales por paso",
         component: UmbralesLineales,
       },
       {
         id: "salto-tau",
-        label: "Salto τ",
+        label: "B) Salto τ con riesgos competidores",
         component: SaltoTau,
       },
       {
-        id: "optimizaciones",
-        label: "¿Por qué las optimizaciones?",
+        id: "bloques",
+        label: "Detalle por bloques (B.1–B.3)",
+        component: Bloques,
+      },
+
+      // Diagramas
+      {
+        id: "diagrama_general",
+        label: "Diagrama general del diseño",
+        component: DiagramGeneral,
+      },
+      {
+        id: "diagrama_pasos",
+        label: "Diagrama de pasos del ciclo",
+        component: DiagramPasos,
+      },
+      {
+        id: "algoritmo",
+        label: "Algoritmo y diagramas (compacto)",
+        component: AlgoritmoDiagramas,
+      },
+
+      // Optimizaciones y arquitectura
+      {
+        id: "optimizaciones-resumen",
+        label: "Optimizaciones (resumen)",
+        component: Optimizaciones,
+      },
+      {
+        id: "optimizaciones-justificacion",
+        label: "Justificación técnica de las optimizaciones",
         component: PorQueOpt,
+      },
+
+      // Validación y compatibilidad
+      {
+        id: "validacion",
+        label: "Consejos de validación",
+        component: Validacion,
+      },
+      {
+        id: "compatibilidad",
+        label: "Compatibilidad de funciones públicas",
+        component: Compatibilidad,
+      },
+
+      // Para desarrolladores
+      {
+        id: "pistas",
+        label: "Pistas de implementación (WASM)",
+        component: Pistas,
       },
     ],
     []
@@ -228,11 +263,11 @@ export default function HelpDialog() {
           </AlertDialogCancel>
         </AlertDialogHeader>
         <div className="grid h-full grid-cols-1 md:grid-cols-[220px_1fr]">
-          <aside className="h-full p-4 overflow-y-auto border-r bg-muted/40 md:p-6">
+          <aside className="h-[calc(85vh)] p-4 grid grid-rows-[1fr_auto]  overflow-y-auto border-r bg-muted/40 md:p-6">
             <div className="mb-3 text-xs font-semibold text-muted-foreground">
               Ayuda
             </div>
-            <nav className="flex flex-col gap-1">
+            <nav className="flex flex-col gap-1 overflow-y-auto">
               {helpSections.map((s) => (
                 <button
                   key={s.id}
