@@ -1,0 +1,13 @@
+# Aproximaciones y casos límite
+
+## Aproximaciones
+- Muestreo binomial híbrido por rendimiento:
+  - Sumas de Bernoulli para tamaños pequeños
+  - Poisson cuando tamaño·probabilidad es pequeño
+  - Aproximación normal en otro caso
+- Las cantidades se redondean a enteros en límites de muestreo para alinear con el motor JS.
+
+## Casos límite y recortes
+- Todas las cantidades se fuerzan a no negativas.
+- Si `λ1+λ2 = 0`, no hay reacción en el bloque (`p_tot = 0`).
+- Límites por recursos sólo aplican en el bloque de `E`; los bloques `ES` y `EP` no consumen recursos externos.

@@ -1,0 +1,25 @@
+# Detalle por bloques (B.1–B.3)
+
+## B.1 Bloque de E libre
+- Tasas por molécula: `λ1 = k1 * S`, `λ2 = k-3 * P`
+- Probabilidad total de reaccionar: `p_tot = 1 - exp(-(λ1 + λ2))`
+- División condicional: `p(ES | react) = λ1 / (λ1 + λ2)`, `p(EP | react) = λ2 / (λ1 + λ2)`
+- Muestreo agregado:
+  1) `n_react ~ Binomial(NEL, p_tot)`
+  2) `n_ES_raw ~ Binomial(n_react, λ1/(λ1+λ2))`, `n_EP_raw = n_react - n_ES_raw`
+  3) Límites por recursos y reasignación del excedente entre canales
+  4) Actualización: `E -= (n_ES + n_EP)`, `ES += n_ES`, `EP += n_EP`, `S -= n_ES`, `P -= n_EP`
+
+## B.2 Bloque de ES
+- Tasas: `λ1_ES = k-1`, `λ2_ES = k2`
+- `p_tot_ES = 1 - exp(-(λ1_ES + λ2_ES))`
+- `n_react_ES ~ Binomial(NES, p_tot_ES)`
+- División: `to_EL ~ Binomial(n_react_ES, λ1_ES/(λ1_ES+λ2_ES))`, `to_EP = n_react_ES - to_EL`
+- Actualización: `E += to_EL`, `S += to_EL`, `ES -= (to_EL + to_EP)`, `EP += to_EP`
+
+## B.3 Bloque de EP
+- Tasas: `λ1_EP = k-2`, `λ2_EP = k3`
+- `p_tot_EP = 1 - exp(-(λ1_EP + λ2_EP))`
+- `n_react_EP ~ Binomial(NEP, p_tot_EP)`
+- División: `to_ES ~ Binomial(n_react_EP, λ1_EP/(λ1_EP+λ2_EP))`, `to_E = n_react_EP - to_ES`
+- Actualización: `ES += to_ES`, `EP -= (to_ES + to_E)`, `E += to_E`, `P += to_E`

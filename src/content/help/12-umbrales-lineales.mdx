@@ -1,0 +1,20 @@
+# A) Umbrales lineales por paso (modelo agregado anterior)
+
+Este modelo refleja directamente el "si / en caso contrario" por molécula en JavaScript empleando probabilidades lineales por paso.
+
+- Para `E` libre:
+  - `q1 = clamp01(k1 * S)` es la probabilidad de que una `E` forme `ES`.
+  - `q2_raw = clamp01(k-3 * P)` es la probabilidad de formar `EP` considerada en segundo lugar.
+  - Probabilidad efectiva `q2 = min(1, q1 + q2_raw) - q1` para preservar la lógica secuencial.
+  - Muestreo `n_ES ~ Binomial(NEL, q1)` y luego, con las enzimas restantes, `n_EP ~ Binomial(NEL - n_ES, q2 / (1 - q1))`.
+  - Límite por recursos: `n_ES <= S`, `n_EP <= P`.
+
+- Para `ES`:
+  - `r1 = clamp01(k-1)`, `r2_raw = clamp01(k2)`; se aplica la misma lógica secuencial.
+
+- Para `EP`:
+  - `s1 = clamp01(k-2)`, `s2_raw = clamp01(k3)`; se aplica la misma lógica secuencial.
+
+## Propiedades
+- Sencillo y coincide con el comportamiento en JavaScript para probabilidades pequeñas.
+- No es invariante a escala: al escalar las cantidades con `k` fijas, `k*S` crece, las probabilidades saturan a 1 y cambian las dinámicas.

@@ -1,0 +1,10 @@
+# Pistas de implementación
+
+- Ver `simulate_steps_final()` y `simulate_steps_series()` en `wasm/src/lib.rs`.
+- Ambas funciones comparten la misma lógica de salto tau.
+- El bloque de `E` incluye reasignación del excedente entre `ES` y `EP` cuando falta `S` o `P` durante el paso.
+
+```text
+Archivo: wasm/src/lib.rs
+Funciones: simulate_steps_final, simulate_steps_series
+```

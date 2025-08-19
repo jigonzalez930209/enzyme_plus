@@ -2,6 +2,7 @@ import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 import { resolve } from "node:path";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import mdx from "@mdx-js/rollup";
 
 export default defineConfig({
   // Configure Electron Main Process build
@@ -43,7 +44,7 @@ export default defineConfig({
         "@": resolve(__dirname, "src"),
       },
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [mdx(), react(), tailwindcss()],
     // Use a different base when building for GitHub Pages so assets resolve under /enzyme_plus/
     // This is toggled by setting the environment variable GITHUB_PAGES=1
     base: process.env.GITHUB_PAGES

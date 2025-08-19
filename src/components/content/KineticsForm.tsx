@@ -94,13 +94,13 @@ export function KineticsForm() {
       </div>
       <div className="space-y-1">
         {/* k1 */}
-        <div className="grid items-center grid-cols-4 gap-1">
+        <div className="grid items-center grid-cols-6 gap-1">
           <label className="text-xs">k₁:</label>
           <input
             type="number"
             value={simulation.params.k1.toNumber()}
             onChange={(e) => handleParamChange("k1", e.target.value)}
-            className="h-4 px-1 py-0 text-xs border rounded border-primary "
+            className="h-4 col-span-2 px-1 py-0 text-xs border rounded border-primary "
             step="0.1"
           />
           <label className="text-xs">k₋₁:</label>
@@ -108,19 +108,19 @@ export function KineticsForm() {
             type="number"
             value={simulation.params.kMinus1.toNumber()}
             onChange={(e) => handleParamChange("kMinus1", e.target.value)}
-            className="h-4 px-1 py-0 text-xs border rounded border-primary "
+            className="h-4 col-span-2 px-1 py-0 text-xs border rounded border-primary "
             step="0.1"
           />
         </div>
 
         {/* k2 */}
-        <div className="grid items-center grid-cols-4 gap-1">
+        <div className="grid items-center grid-cols-6 gap-1">
           <label className="text-xs">k₂:</label>
           <input
             type="number"
             value={simulation.params.k2.toNumber()}
             onChange={(e) => handleParamChange("k2", e.target.value)}
-            className="h-4 px-1 py-0 text-xs border rounded border-primary "
+            className="h-4 col-span-2 px-1 py-0 text-xs border rounded border-primary "
             step="0.1"
           />
           <label className="text-xs">k₋₂:</label>
@@ -128,19 +128,19 @@ export function KineticsForm() {
             type="number"
             value={simulation.params.kMinus2.toNumber()}
             onChange={(e) => handleParamChange("kMinus2", e.target.value)}
-            className="h-4 px-1 py-0 text-xs border rounded border-primary "
+            className="h-4 col-span-2 px-1 py-0 text-xs border rounded border-primary "
             step="0.1"
           />
         </div>
 
         {/* k3 */}
-        <div className="grid items-center grid-cols-4 gap-1">
+        <div className="grid items-center grid-cols-6 gap-1">
           <label className="text-xs">k₃:</label>
           <input
             type="number"
             value={simulation.params.k3.toNumber()}
             onChange={(e) => handleParamChange("k3", e.target.value)}
-            className="h-4 px-1 py-0 text-xs border rounded border-primary"
+            className="h-4 col-span-2 px-1 py-0 text-xs border rounded border-primary"
             step="0.1"
           />
           <label className="text-xs">k₋₃:</label>
@@ -148,7 +148,7 @@ export function KineticsForm() {
             type="number"
             value={simulation.params.kMinus3.toNumber()}
             onChange={(e) => handleParamChange("kMinus3", e.target.value)}
-            className="h-4 px-1 py-0 text-xs border rounded border-primary"
+            className="h-4 col-span-2 px-1 py-0 text-xs border rounded border-primary"
             step="0.1"
           />
         </div>

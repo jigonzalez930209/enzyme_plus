@@ -1,0 +1,23 @@
+# Algoritmos: resumen y notación
+
+Este conjunto de secciones resume los dos modelos estocásticos agregados implementados en WASM (Rust) y cómo se relacionan con el bucle original por molécula.
+
+- Implementación actual (predeterminada): salto tau con riesgos competidores
+- Implementación agregada anterior: umbrales lineales por paso
+
+Las funciones públicas son las mismas: `simulate_steps_final(...)` y `simulate_steps_series(...)`.
+
+## Notación
+
+- Cantidades de especies al inicio de cada paso: `E, ES, EP, S, P` (no negativas). Para muestrear se redondean a enteros al comienzo del paso.
+- Constantes de reacción: `k1, k-3, k-1, k2, k-2, k3` (intensidades por paso de tiempo).
+- Generador de aleatorios: misma fuente que JavaScript.
+- Muestreo binomial: exacto para tamaños pequeños; Poisson si tamaño·probabilidad es pequeño; normal en caso contrario.
+
+Ambos algoritmos actualizan en tres bloques por paso:
+
+1. `E` libre: uniones hacia `ES` y `EP`
+2. `ES`: desasociación (`E+S`) o conversión (`EP`)
+3. `EP`: desasociación (`ES`) o conversión (`E+P`)
+
+La conservación de masa se cumple por construcción en cada bloque.

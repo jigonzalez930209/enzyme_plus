@@ -1,0 +1,18 @@
+# Diagrama general del diseño
+
+El flujo de la simulación y la emisión de estados:
+<Mermaid
+  chart={`flowchart TD
+  UI[Controles de simulación en la interfaz] -->|cambios de parámetros y del paso de tiempo| Engine[Motor de simulación]
+  Engine -->|programar siguiente ciclo| Timer[Temporizador con intervalo fijo de actualización de 20 milisegundos]
+  Timer --> Step{¿Velocidad alta?}
+  Step -- No --> One[Un paso de tiempo]
+  Step -- Sí --> Series[Lote con varios pasos de tiempo]
+  One --> WasmFinal[WebAssembly: simulate_steps_final]
+  Series --> WasmSeries[WebAssembly: simulate_steps_series]
+  WasmFinal --> EmitOne[Emitir estado: tiempo, E, ES, EP, S, P]
+  WasmSeries --> EmitSeries[Emitir todos los estados intermedios]
+  EmitOne --> Resched[Reprogramar siguiente ciclo]
+  EmitSeries --> Resched
+`}
+/>

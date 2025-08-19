@@ -1,0 +1,18 @@
+# ¿Cómo funciona la aplicación (visión general)?
+
+Esta app simula un sistema enzimático estocástico en tiempo discreto.
+
+- El panel izquierdo (controles) permite ajustar:
+  - Velocidad de simulación (`Speed`): factor 0.1×–100× en escala logarítmica.
+  - Paso de tiempo (`dt`): 1 ms – 10 s en escala logarítmica. Controla la resolución temporal del modelo.
+- La zona principal muestra gráficos de evolución y valores instantáneos.
+- Puedes pausar, reanudar y modificar parámetros durante la ejecución.
+
+Flujo típico de uso:
+1. Ajusta `dt` para equilibrar precisión/estabilidad vs. rendimiento.
+2. Ajusta `Speed` para visualizar más rápido o más lento sin alterar la dinámica subyacente.
+3. Observa concentraciones y gráficas; modifica parámetros si quieres estudiar nuevos regímenes.
+
+Notas:
+- Cambiar `dt` afecta la integración del sistema (más pequeño → más preciso; más grande → más rápido pero con riesgo de error de integración).
+- Cambiar `Speed` solo afecta la velocidad de animación y procesamiento, no el modelo en sí.

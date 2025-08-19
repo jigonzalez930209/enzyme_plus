@@ -76,7 +76,8 @@ export function MainContent() {
 
   // Export TSV of history: Time, E, S, ES, EP, P
   const handleSaveTSV = () => {
-    if (!(simulation.status === "paused" || simulation.status === "stopped")) return;
+    if (!(simulation.status === "paused" || simulation.status === "stopped"))
+      return;
     const rows = [
       ["Time", "E", "S", "ES", "EP", "P"],
       ...simulation.history.map((h) => [
@@ -105,7 +106,8 @@ export function MainContent() {
 
   // Export Excel (.xlsx)
   const handleSaveXLSX = () => {
-    if (!(simulation.status === "paused" || simulation.status === "stopped")) return;
+    if (!(simulation.status === "paused" || simulation.status === "stopped"))
+      return;
     const data = [
       ["Time", "E", "S", "ES", "EP", "P"],
       ...simulation.history.map((h) => [
@@ -193,12 +195,6 @@ export function MainContent() {
               Present values
             </h3>
             <SimulationController />
-          </div>
-
-          <div className="p-3 text-center border rounded border-border bg-card">
-            <button className="px-3 py-1 text-xs rounded bg-muted hover:bg-muted/80 text-muted-foreground">
-              📁 File output settings...
-            </button>
           </div>
         </div>
 

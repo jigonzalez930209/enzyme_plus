@@ -1,0 +1,21 @@
+
+# Diagrama de pasos dentro de cada ciclo
+
+<div className="flex justify-center">
+<Mermaid className="w-full" chart={`flowchart TD
+  A[Inicio del paso: tomar instantánea de E, ES, EP] --> B[Bloque E]
+  B -->|tasas k1*S y k-3*P| B1[Muestrear reacciones y dividir en ES y EP]
+  B1 --> B2[Aplicar límites por S y P con reasignación del excedente]
+  B2 --> C[Actualizar E, ES, EP, S, P]
+
+C --> D[Bloque ES]
+D -->|tasas k-1 y k2| D1[Muestrear reacciones y dividir en regreso o conversión]
+D1 --> E[Actualizar E, ES, EP, S, P]
+
+E --> F[Bloque EP]
+F -->|tasas k-2 y k3| F1[Muestrear reacciones y dividir en regreso o conversión]
+F1 --> G[Actualizar E, ES, EP, S, P]
+
+G --> H[Fin del paso: avanzar el paso de tiempo y emitir estados]
+`} />
+</div>

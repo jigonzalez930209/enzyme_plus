@@ -1,15 +1,15 @@
 import React from "react";
 import { ThemeToggle } from "./ThemeToggle";
+import HelpDialog from "./HelpDialog";
 import WindowControls from "./WindowControls";
-import logo from "/logo.png";
+import logo from "../assets/logo.svg";
 
 const TitleBar: React.FC = () => {
   const isElectron =
-    typeof window !== "undefined" && (
-      !!(window as unknown as { electronAPI?: unknown }).electronAPI ||
+    typeof window !== "undefined" &&
+    (!!(window as unknown as { electronAPI?: unknown }).electronAPI ||
       !!(window as unknown as { isElectron?: unknown }).isElectron ||
-      /electron/i.test(navigator.userAgent)
-    );
+      /electron/i.test(navigator.userAgent));
 
   return (
     <div className="flex items-center justify-between h-10 px-2 border-b select-none bg-muted drag-region">
@@ -24,6 +24,9 @@ const TitleBar: React.FC = () => {
           Enzyme Plus
         </h1>
         <nav className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="no-drag">
+            <HelpDialog />
+          </div>
           <div className="no-drag">
             <ThemeToggle />
           </div>

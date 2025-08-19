@@ -2,6 +2,8 @@ import { defineConfig } from "vite";
 import path from "node:path";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import mdx from "@mdx-js/rollup";
+import mdxMermaid from "mdx-mermaid";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -18,5 +20,17 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "src"),
     },
   },
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    mdx({
+      // Allow runtime components mapping via <MDXProvider />
+      providerImportSource: "@mdx-js/react",
+      // Transform ```mermaid blocks into mdx-mermaid components
+      remarkPlugins: [[(mdxMermaid as any).default, {
+        output: "svg",
+        theme: { light: "neutral", dark: "forest" },
+      }]],
+    }),
+    react(),
+    tailwindcss(),
+  ],
 }));

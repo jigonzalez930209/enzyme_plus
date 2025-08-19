@@ -1,0 +1,13 @@
+# B) Salto tau con riesgos competidores (modelo actual)
+
+Modelo de discretización por salto tau de una cadena de Markov en tiempo continuo. Trata reacciones como riesgos exponenciales que compiten durante el paso de tiempo.
+
+## Idea general
+- Para cada estado, se define `p_tot = 1 - exp(-\sum \lambda_i)`, la probabilidad de que ocurra una reacción en el paso.
+- La división condicional entre canales usa las razones de tasas `\lambda_i / \sum \lambda`.
+- El muestreo agregado combina un binomial para reacciones totales y otro para repartir entre canales.
+
+## Propiedades
+- Para tasas pequeñas: `exp(-x) ≈ 1 - x`, por lo que `p_tot ≈ \sum \lambda` y coincide con umbrales lineales en primer orden.
+- Estable ante escalado: multiplicar cantidades manteniendo `k` constantes preserva razones y evita saturación prematura.
+- Conservación de masa por bloque.

@@ -1,0 +1,15 @@
+# Bosquejo general de la técnica
+
+Esta aplicación ilustra una técnica estocástica para cinética enzimática con complejos intermedios.
+
+- El sistema tiene estados: S (sustrato), P (producto), E (enzima libre), ES y EP (complejos).
+- Las transiciones representan reacciones (p. ej. E + S ⇄ ES, ES ⇄ EP, EP ⇄ E + P).
+- Cada transición ocurre con una probabilidad por unidad de tiempo regida por sus tasas.
+- La simulación avanza en pasos de tiempo pequeños `dt` y actualiza las cantidades según el algoritmo seleccionado.
+
+Ventajas:
+- Permite observar fluctuaciones estocásticas (ruido) y regímenes transitorios.
+- Facilita experimentar con distintos `dt` y velocidades de simulación para un entendimiento intuitivo.
+
+Limitaciones:
+- Para ciertas tasas muy altas o conteos muy grandes, puede requerir pasos muy pequeños o aproximaciones.

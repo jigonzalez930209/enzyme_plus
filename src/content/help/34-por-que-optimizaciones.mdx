@@ -1,0 +1,32 @@
+# ¿Por qué se hicieron las optimizaciones?
+
+Objetivos de las optimizaciones:
+
+- Rendimiento: mantener FPS fluido al aumentar conteos y duración de la simulación.
+- Estabilidad numérica: evitar errores por pasos grandes en procesos rápidos.
+- Experiencia de usuario: controles intuitivos con escalas logarítmicas.
+
+Medidas adoptadas (resumen):
+- Control de `dt` en escala log (1 ms – 10 s) para afinar precisión/rendimiento.
+- Control de `Speed` en escala log (0.1×–100×) para desacoplar visualización del modelo.
+- Integración y rutas optimizadas en JS/WASM para minimizar overhead.
+- Representaciones gráficas eficientes para grandes cantidades de pasos.
+
+Trade-offs:
+- `dt` pequeño → más preciso pero más costo computacional.
+- `dt` grande → más rápido pero potencialmente menos fiel.
+
+Recomendación: ajusta `dt` y `Speed` según el régimen que estudies.
+
+Medidas adoptadas (detalladas):
+
+- Cálculo en WebAssembly (Rust)
+- Emisión de cada paso de tiempo
+- Primer ciclo con un solo paso
+- Lotes con serie de estados y cadencia estable
+- Muestreo binomial híbrido
+- Reasignación del excedente por falta de recursos (bloque E)
+- Instantánea inicial de conteos
+- Eliminación del camino en JavaScript
+- Inicialización robusta de WebAssembly
+- Conservación de masa y estabilidad

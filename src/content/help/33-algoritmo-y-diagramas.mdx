@@ -1,0 +1,19 @@
+import Diagram from "./Diagram";
+
+
+# Algoritmo y explicación de los diagramas
+
+
+
+La simulación implementa transiciones entre estados con tasas definidas. Un esquema general:
+
+<Diagram  />
+
+- Flechas dobles conceptuales implican reacciones reversibles en el modelo.
+- El algoritmo actual utiliza un avance por pasos `dt` con actualización de estados acorde a tasas y eventos.
+- Para diagramas más detallados, ver “Diagrama general” y “Diagrama de pasos” (esta sección resume ambos con un gráfico compacto).
+
+Buenas prácticas:
+
+- Usa `dt` más pequeño para regímenes rápidos (tasas altas) o conteos pequeños.
+- Verifica coherencia temporal: si eventos improbables ocurren con demasiada frecuencia, reduce `dt`.
