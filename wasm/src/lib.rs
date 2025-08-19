@@ -297,3 +297,102 @@ pub fn simulate_steps_series(
     arr.copy_from(&data);
     arr
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    fn assert_finite_nonneg(v: f64) {
+        assert!(v.is_finite(), "value is not finite: {}", v);
+        assert!(v >= 0.0, "value is negative: {}", v);
+    }
+
+    #[wasm_bindgen_test]
+    fn large_ep_simulate_steps_final() {
+        // Initial conditions with very large EP
+        let e0 = 10.0;
+        let es0 = 0.0;
+        let ep0 = 1_000_000.0;
+        let s0 = 1_000_000.0;
+        let p0 = 1_000_000.0;
+        let t0 = 0.0;
+        let ns = 0.0;
+        let np = 0.0;
+        // Moderate rates and dt
+        let k1 = 1e-3;
+        let k_minus3 = 1e-3;
+        let k_minus1 = 1e-3;
+        let k2 = 1e-3;
+        let k_minus2 = 1e-3;
+        let k3 = 1e-3;
+        let dt = 0.01;
+        let steps = 10u32;
+
+        let total_e0 = e0 + es0 + ep0;
+        let out = simulate_steps_final(
+            e0, es0, ep0, s0, p0, t0, ns, np,
+            k1, k_minus3, k_minus1, k2, k_minus2, k3,
+            dt, steps,
+        );
+        let v = out.to_vec();
+        assert_eq!(v.len(), 6);
+        let (e, es, ep, s, p, t) = (v[0], v[1], v[2], v[3], v[4], v[5]);
+        assert_finite_nonneg(e);
+        assert_finite_nonneg(es);
+        assert_finite_nonneg(ep);
+        assert_finite_nonneg(s);
+        assert_finite_nonneg(p);
+        assert!(t.is_finite() && t > 0.0);
+        // Mass conservation of E
+        let total_e = e + es + ep;
+        assert!((total_e - total_e0).abs() < 1e-6, "E mass not conserved: {} vs {}", total_e, total_e0);
+    }
+
+    #[wasm_bindgen_test]
+    fn large_ep_simulate_steps_series() {
+        let e0 = 10.0;
+        let es0 = 0.0;
+        let ep0 = 1_000_000.0;
+        let s0 = 1_000_000.0;
+        let p0 = 1_000_000.0;
+        let t0 = 0.0;
+        let ns = 0.0;
+        let np = 0.0;
+        let k1 = 5e-4;
+        let k_minus3 = 5e-4;
+        let k_minus1 = 5e-4;
+        let k2 = 5e-4;
+        let k_minus2 = 5e-4;
+        let k3 = 5e-4;
+        let dt = 0.02;
+        let steps = 20u32;
+
+        let total_e0 = e0 + es0 + ep0;
+        let out = simulate_steps_series(
+            e0, es0, ep0, s0, p0, t0, ns, np,
+            k1, k_minus3, k_minus1, k2, k_minus2, k3,
+            dt, steps,
+        );
+        let data = out.to_vec();
+        assert_eq!(data.len(), (6 * steps as usize));
+        for i in 0..steps as usize {
+            let base = 6 * i;
+            let e = data[base + 0];
+            let es = data[base + 1];
+            let ep = data[base + 2];
+            let s = data[base + 3];
+            let p = data[base + 4];
+            let t = data[base + 5];
+            assert_finite_nonneg(e);
+            assert_finite_nonneg(es);
+            assert_finite_nonneg(ep);
+            assert_finite_nonneg(s);
+            assert_finite_nonneg(p);
+            let total_e = e + es + ep;
+            assert!((total_e - total_e0).abs() < 1e-6, "E mass not conserved at step {}: {} vs {}", i+1, total_e, total_e0);
+            let expected_t = dt * ((i as f64) + 1.0);
+            assert!((t - expected_t).abs() < 1e-9, "time mismatch at step {}: got {}, expected {}", i+1, t, expected_t);
+        }
+    }
+}
