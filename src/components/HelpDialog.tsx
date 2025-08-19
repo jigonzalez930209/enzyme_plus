@@ -222,7 +222,7 @@ export default function HelpDialog() {
             asChild
           >
             <Button variant="destructive" size="icon">
-              <XIcon className="w-4 h-4" />
+              <XIcon className="w-4 h-4 text-primary" />
               <span className="sr-only">Close Help</span>
             </Button>
           </AlertDialogCancel>

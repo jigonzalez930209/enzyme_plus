@@ -12,7 +12,7 @@ const TitleBar: React.FC = () => {
       /electron/i.test(navigator.userAgent));
 
   return (
-    <div className="flex items-center justify-between h-10 px-2 border-b select-none bg-muted drag-region">
+    <div className="flex items-center justify-between h-10 p-2 border-b select-none bg-muted drag-region">
       <div className="flex items-center gap-4">
         <h1 className="flex flex-row items-center gap-2 text-lg font-bold text-foreground">
           {" "}
