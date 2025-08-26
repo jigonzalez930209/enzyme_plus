@@ -11,12 +11,7 @@ import { KineticsForm } from "./KineticsForm";
 import { SimulationRunner } from "../simulation/SimulationRunner";
 import ExportDialog from "./ExportDialog";
 import { Button } from "../ui/button";
-import {
-  PauseIcon,
-  PlayIcon,
-  SquareIcon,
-  StepForwardIcon,
-} from "lucide-react";
+import { PauseIcon, PlayIcon, SquareIcon, StepForwardIcon } from "lucide-react";
 
 function ClientOnly({ children }: { children: React.ReactNode }) {
   const [hasHydrated, setHasHydrated] = React.useState(false);
@@ -141,7 +136,7 @@ export function MainContent() {
     <ClientOnly>
       <SimulationRunner />
       <div className="flex h-[calc(100vh-2rem)] bg-background">
-        <div className="flex flex-col gap-4 p-4 border-r w-80 bg-card border-border">
+        <div className="flex flex-col gap-4 p-4 overflow-y-auto border-r w-80 bg-card border-border">
           <div className="flex items-center justify-center gap-2">
             <Button
               size="icon"
