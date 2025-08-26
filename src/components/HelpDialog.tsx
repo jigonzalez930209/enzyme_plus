@@ -27,7 +27,6 @@ import UmbralesLineales from "@/content/help/12-umbrales-lineales.mdx";
 import AlgoritmoYNota from "@/content/help/10-algoritmos-resumen-y-notacion.mdx";
 import Optimizaciones from "@/content/help/18-optimizaciones.mdx";
 import Validacion from "@/content/help/19-consejos-validacion.mdx";
-import Compatibilidad from "@/content/help/20-compatibilidad-funciones.mdx";
 import Pistas from "@/content/help/16-pistas-implementacion.mdx";
 
 type Section = {
@@ -214,12 +213,6 @@ export default function HelpDialog() {
         label: "Consejos de validación",
         component: Validacion,
       },
-      {
-        id: "compatibilidad",
-        label: "Compatibilidad de funciones públicas",
-        component: Compatibilidad,
-      },
-
       // Para desarrolladores
       {
         id: "pistas",

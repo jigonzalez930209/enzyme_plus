@@ -45,47 +45,68 @@ export const PlotComponent = React.forwardRef<HTMLDivElement, PlotProps>(
       return simulation.history;
     }, [simulation.status, simulation.scrubIndex, simulation.history]);
 
-    // Create plot data from derived history
+    // Create plot data from derived history, including pinned runs overlays
     const plotData = React.useMemo(() => {
-      if (historyForPlot.length === 0) {
-        return [];
-      }
-
-      const species = ["S", "P", "E", "ES", "EP"];
-      const colors = {
+      const species = ["S", "P", "E", "ES", "EP"] as const;
+      const colors: Record<typeof species[number], string> = {
         S: "#3b82f6", // blue
         P: "#ef4444", // red
         E: "#22c55e", // green
         ES: "#f59e0b", // orange
         EP: "#8b5cf6", // purple
-      };
+      } as const;
 
-      const data = species.map((speciesName) => {
-        const x = historyForPlot.map((h) => h.time);
-        const y = historyForPlot.map(
-          (h) => h.concentrations[speciesName as keyof typeof h.concentrations]
-        );
+      const traces: Array<Record<string, unknown>> = [];
 
-        return {
-          x,
-          y,
-          type: "scatter" as const,
-          mode: "lines" as const,
-          name: speciesName,
-          line: {
-            color: colors[speciesName as keyof typeof colors],
-            width: 1,
-          },
-        };
-      });
+      // Overlay pinned runs first (dimmed, dashed)
+      for (const run of simulation.pinnedRuns) {
+        for (const s of species) {
+          const x = run.history.map((h) => h.time);
+          const y = run.history.map((h) => h.concentrations[s]);
+          traces.push({
+            x,
+            y,
+            type: "scatter" as const,
+            mode: "lines" as const,
+            name: `${s} (${run.label})`,
+            line: {
+              color: colors[s],
+              width: 1,
+              dash: "dot" as const,
+            },
+            opacity: 0.6,
+          });
+        }
+      }
 
-      return data;
-    }, [historyForPlot]);
+      // Note: No experimental dataset or fitted model overlay on the main plot.
+
+      // Current run
+      if (historyForPlot.length > 0) {
+        for (const s of species) {
+          const x = historyForPlot.map((h) => h.time);
+          const y = historyForPlot.map((h) => h.concentrations[s]);
+          traces.push({
+            x,
+            y,
+            type: "scatter" as const,
+            mode: "lines" as const,
+            name: s,
+            line: {
+              color: colors[s],
+              width: 2,
+            },
+          });
+        }
+      }
+
+      return traces;
+    }, [historyForPlot, simulation.pinnedRuns, isDark]);
 
     const layout = React.useMemo(
       () => ({
         title: {
-          text: "Enzyme Kinetics Simulation",
+          text: `Enzyme Kinetics Simulation${simulation.pinnedRuns.length ? ` — ${simulation.pinnedRuns.length} comparada(s)` : ""}`,
           font: { color: isDark ? "#e2e8f0" : "#1e293b" },
         },
         xaxis: {
@@ -113,8 +134,10 @@ export const PlotComponent = React.forwardRef<HTMLDivElement, PlotProps>(
         font: { color: isDark ? "#e2e8f0" : "#1e293b" },
         autosize: true,
         margin: { l: 60, r: 30, t: 50, b: 50 },
+        showlegend: true,
+        annotations: [],
       }),
-      [isDark]
+      [isDark, simulation.pinnedRuns.length]
     );
 
     const config = React.useMemo(

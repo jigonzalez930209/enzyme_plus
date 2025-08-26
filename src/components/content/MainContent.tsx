@@ -11,7 +11,12 @@ import { KineticsForm } from "./KineticsForm";
 import { SimulationRunner } from "../simulation/SimulationRunner";
 import ExportDialog from "./ExportDialog";
 import { Button } from "../ui/button";
-import { PauseIcon, PlayIcon, SquareIcon, StepForwardIcon } from "lucide-react";
+import {
+  PauseIcon,
+  PlayIcon,
+  SquareIcon,
+  StepForwardIcon,
+} from "lucide-react";
 
 function ClientOnly({ children }: { children: React.ReactNode }) {
   const [hasHydrated, setHasHydrated] = React.useState(false);
@@ -43,7 +48,13 @@ export function MainContent() {
   const [exportOpen, setExportOpen] = React.useState(false);
 
   const simulation = useSimulationState();
-  const { setStatus, resetSimulation } = useSimulationActions();
+  const {
+    setStatus,
+    resetSimulation,
+    pinCurrentRun,
+    clearPinnedRuns,
+    removePinnedRun,
+  } = useSimulationActions();
 
   React.useEffect(() => {
     if (
@@ -195,6 +206,63 @@ export function MainContent() {
               Valores actuales
             </h3>
             <SimulationController />
+          </div>
+
+          <div className="p-3 border rounded border-border bg-card">
+            <h3 className="mb-3 text-sm font-semibold text-foreground">
+              Comparaciones
+            </h3>
+            <div className="flex items-center gap-2 mb-2">
+              <Button
+                onClick={() => pinCurrentRun()}
+                disabled={simulation.history.length === 0}
+                className="px-3 py-1 text-xs font-semibold text-white bg-blue-600 rounded hover:bg-blue-700"
+                title="Guardar la corrida actual para comparar"
+              >
+                Pinear corrida
+              </Button>
+              <Button
+                onClick={() => clearPinnedRuns()}
+                disabled={simulation.pinnedRuns.length === 0}
+                className="px-3 py-1 text-xs font-semibold text-white bg-gray-500 rounded hover:bg-gray-600"
+                title="Eliminar todas las corridas guardadas"
+              >
+                Limpiar
+              </Button>
+            </div>
+            <div className="mb-2 text-xs text-muted-foreground">
+              {simulation.pinnedRuns.length} corrida(s) guardada(s)
+            </div>
+            {simulation.pinnedRuns.length > 0 && (
+              <ul className="pr-1 space-y-1 overflow-auto max-h-40">
+                {simulation.pinnedRuns.map((run) => (
+                  <li
+                    key={run.id}
+                    className="flex items-center justify-between gap-2 px-2 py-1 border rounded"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium truncate">
+                        {run.label}
+                      </div>
+                      <div className="truncate text-[10px] text-muted-foreground">
+                        t=
+                        {run.history[run.history.length - 1]?.time?.toFixed?.(
+                          0
+                        ) ?? 0}
+                        s · puntos: {run.history.length}
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => removePinnedRun(run.id)}
+                      className="px-2 py-1 text-[10px] bg-red-500 hover:bg-red-600 text-white rounded"
+                      title="Eliminar esta corrida"
+                    >
+                      Quitar
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 

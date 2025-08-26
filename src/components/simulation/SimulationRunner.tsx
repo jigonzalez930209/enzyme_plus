@@ -42,6 +42,11 @@ export function SimulationRunner() {
     if (!engineRef.current) return;
 
     if (simulation.status === "running") {
+      // Sync engine with latest store state and params before starting.
+      // This is critical when resetSimulation() and setStatus('running') happen back-to-back
+      // (e.g., from FitDialog), so we don't miss the 'stopped' sync effect.
+      engineRef.current.updateParams(simulation.params);
+      engineRef.current.updateState(simulation.concentrations, simulation.time);
       engineRef.current.start();
     } else {
       engineRef.current.stop();

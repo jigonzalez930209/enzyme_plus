@@ -298,6 +298,277 @@ pub fn simulate_steps_series(
     arr
 }
 
+#[wasm_bindgen]
+pub fn objective_sse(
+    e0: f64,
+    es0: f64,
+    ep0: f64,
+    s0: f64,
+    p0: f64,
+    t0: f64,
+    ns: f64,
+    np: f64,
+    k1: f64,
+    k_minus3: f64,
+    k_minus1: f64,
+    k2: f64,
+    k_minus2: f64,
+    k3: f64,
+    dt: f64,
+    times: &Float64Array,
+    y_obs: &Float64Array,
+    species_code: u32,
+) -> f64 {
+    let n = times.length() as usize;
+    if n == 0 { return 0.0; }
+    let n_obs = y_obs.length() as usize;
+    let n_use = n.min(n_obs);
+    if n_use == 0 { return 0.0; }
+
+    let mut tt: Vec<f64> = vec![0.0; n_use];
+    let mut yy: Vec<f64> = vec![0.0; n_use];
+    times.slice(0, n_use as u32).copy_to(&mut tt);
+    y_obs.slice(0, n_use as u32).copy_to(&mut yy);
+
+    // Determine number of steps based on max time and dt
+    let dt_clamped = if dt.is_finite() && dt > 0.0 { dt } else { 1.0 };
+    let mut max_t = 0.0;
+    for &x in &tt { if x.is_finite() && x > max_t { max_t = x; } }
+    if max_t <= 0.0 { return 0.0; }
+    let steps = ((max_t / dt_clamped).ceil() as i64).max(1) as u32;
+
+    // Simulate series
+    let series = simulate_steps_series(
+        e0, es0, ep0, s0, p0, t0, ns, np,
+        k1, k_minus3, k_minus1, k2, k_minus2, k3,
+        dt_clamped, steps,
+    );
+    let data = series.to_vec();
+    let m = (data.len() / 6) as usize;
+    if m == 0 { return f64::NAN; }
+
+    // Prepare time vector and species index accessor
+    let mut t_series: Vec<f64> = Vec::with_capacity(m);
+    for i in 0..m { t_series.push(data[6*i + 5]); }
+
+    // Map species code to per-step index
+    let sp_idx: usize = match species_code { // 0:S,1:P,2:E,3:ES,4:EP
+        0 => 3,
+        1 => 4,
+        2 => 0,
+        3 => 1,
+        4 => 2,
+        _ => 4, // default P
+    };
+
+    // Helper to get species value at step i
+    let val_at = |i: usize| -> f64 { data[6*i + sp_idx] };
+
+    // Interpolate for each target time
+    let mut sse = 0.0;
+    for i in 0..n_use {
+        let tt_i = tt[i];
+        if !tt_i.is_finite() { continue; }
+        let mut y_pred;
+        if tt_i <= t_series[0] {
+            y_pred = val_at(0);
+        } else if tt_i >= t_series[m-1] {
+            y_pred = val_at(m-1);
+        } else {
+            // binary search for bracket
+            let mut lo: usize = 0;
+            let mut hi: usize = m - 1;
+            while lo + 1 < hi {
+                let mid = (lo + hi) / 2;
+                if t_series[mid] <= tt_i { lo = mid; } else { hi = mid; }
+            }
+            let t0 = t_series[lo];
+            let t1 = t_series[hi];
+            let y0 = val_at(lo);
+            let y1 = val_at(hi);
+            let w = if t1 > t0 { (tt_i - t0) / (t1 - t0) } else { 0.0 };
+            y_pred = y0 + w * (y1 - y0);
+        }
+        let e = yy[i] - y_pred;
+        sse += e * e;
+    }
+
+    sse
+}
+
+fn sse_from_params(
+    e0: f64, es0: f64, ep0: f64, s0: f64, p0: f64, t0: f64, ns: f64, np: f64,
+    k1: f64, k_minus3: f64, k_minus1: f64, k2: f64, k_minus2: f64, k3: f64,
+    dt: f64,
+    times: &[f64], y_obs: &[f64], species_code: u32,
+) -> f64 {
+    let n_use = times.len().min(y_obs.len());
+    if n_use == 0 { return 0.0; }
+    let dt_clamped = if dt.is_finite() && dt > 0.0 { dt } else { 1.0 };
+    let mut max_t = 0.0;
+    for &x in times.iter().take(n_use) { if x.is_finite() && x > max_t { max_t = x; } }
+    if max_t <= 0.0 { return 0.0; }
+    let steps = ((max_t / dt_clamped).ceil() as i64).max(1) as u32;
+
+    let series = simulate_steps_series(
+        e0, es0, ep0, s0, p0, t0, ns, np,
+        k1, k_minus3, k_minus1, k2, k_minus2, k3,
+        dt_clamped, steps,
+    );
+    let data = series.to_vec();
+    let m = (data.len() / 6) as usize;
+    if m == 0 { return f64::NAN; }
+    let mut t_series: Vec<f64> = Vec::with_capacity(m);
+    for i in 0..m { t_series.push(data[6*i + 5]); }
+    let sp_idx: usize = match species_code { 0 => 3, 1 => 4, 2 => 0, 3 => 1, 4 => 2, _ => 4 };
+    let val_at = |i: usize| -> f64 { data[6*i + sp_idx] };
+    let mut sse = 0.0;
+    for i in 0..n_use {
+        let tt_i = times[i];
+        if !tt_i.is_finite() { continue; }
+        let y_pred = if tt_i <= t_series[0] {
+            val_at(0)
+        } else if tt_i >= t_series[m-1] {
+            val_at(m-1)
+        } else {
+            let mut lo: usize = 0; let mut hi: usize = m - 1;
+            while lo + 1 < hi { let mid = (lo + hi) / 2; if t_series[mid] <= tt_i { lo = mid; } else { hi = mid; } }
+            let t0b = t_series[lo]; let t1b = t_series[hi];
+            let y0 = val_at(lo); let y1 = val_at(hi);
+            let w = if t1b > t0b { (tt_i - t0b) / (t1b - t0b) } else { 0.0 };
+            y0 + w * (y1 - y0)
+        };
+        let e = y_obs[i] - y_pred; sse += e * e;
+    }
+    sse
+}
+
+#[wasm_bindgen]
+pub fn fit_nelder_mead(
+    e0: f64, es0: f64, ep0: f64, s0: f64, p0: f64, t0: f64, ns: f64, np: f64,
+    params_in: &Float64Array, // [k1,k-3,k-1,k2,k-2,k3,dt]
+    mask: &js_sys::Uint8Array, // 1 => optimize, length 7
+    times: &Float64Array,
+    y_obs: &Float64Array,
+    species_code: u32,
+    max_iter: u32,
+    tol: f64,
+    scale: f64,
+) -> Float64Array {
+    let mut params = [0.0f64; 7];
+    params_in.copy_to(&mut params);
+    let mut mvec = vec![0u8; mask.length() as usize];
+    mask.slice(0, 7).copy_to(&mut mvec[..]);
+    let optimize_idx: Vec<usize> = (0..7).filter(|&i| mvec.get(i).copied().unwrap_or(0) != 0).collect();
+    let n = optimize_idx.len();
+    let t_vec = times.to_vec();
+    let y_vec = y_obs.to_vec();
+    if n == 0 {
+        // Nothing to optimize, just return input and SSE
+        let sse = sse_from_params(
+            e0, es0, ep0, s0, p0, t0, ns, np,
+            params[0], params[1], params[2], params[3], params[4], params[5], params[6],
+            &t_vec, &y_vec, species_code,
+        );
+        let out = js_sys::Array::new_with_length(8);
+        for i in 0..7 { out.set(i as u32, JsValue::from_f64(params[i])); }
+        out.set(7, JsValue::from_f64(sse));
+        return Float64Array::new(&out);
+    }
+
+    // Build initial simplex around current params in the subspace
+    let mut x0: Vec<f64> = optimize_idx.iter().map(|&i| params[i]).collect();
+    let mut simplex: Vec<Vec<f64>> = Vec::with_capacity(n + 1);
+    simplex.push(x0.clone());
+    let sc = if scale.is_finite() && scale > 0.0 { scale } else { 0.1 };
+    for i in 0..n {
+        let mut xi = x0.clone();
+        let base = xi[i].abs();
+        let delta = if base > 0.0 { base * sc } else { sc };
+        xi[i] = xi[i] + delta;
+        simplex.push(xi);
+    }
+
+    let mut fvals: Vec<f64> = vec![0.0; n + 1];
+    let eval = |x: &Vec<f64>| -> f64 {
+        // fill params with x at optimize_idx
+        let mut trial = params;
+        for (j, &idx) in optimize_idx.iter().enumerate() { trial[idx] = x[j].max(0.0); }
+        let dtp = trial[6].max(1e-12);
+        sse_from_params(
+            e0, es0, ep0, s0, p0, t0, ns, np,
+            trial[0], trial[1], trial[2], trial[3], trial[4], trial[5], dtp,
+            &t_vec, &y_vec, species_code,
+        )
+    };
+    for i in 0..(n + 1) { fvals[i] = eval(&simplex[i]); }
+
+    // Nelder–Mead parameters
+    let alpha = 1.0; // reflection
+    let gamma = 2.0; // expansion
+    let rho = 0.5; // contraction
+    let sigma = 0.5; // shrink
+
+    let mut iter = 0;
+    while iter < max_iter {
+        // Order simplex by f
+        let mut idxs: Vec<usize> = (0..(n + 1)).collect();
+        idxs.sort_by(|&a, &b| fvals[a].partial_cmp(&fvals[b]).unwrap_or(std::cmp::Ordering::Equal));
+        simplex = idxs.iter().map(|&i| simplex[i].clone()).collect();
+        fvals = idxs.iter().map(|&i| fvals[i]).collect();
+
+        // Check convergence: stddev of fvals
+        let mean = fvals.iter().sum::<f64>() / (n as f64 + 1.0);
+        let var = fvals.iter().map(|v| (v - mean) * (v - mean)).sum::<f64>() / (n as f64 + 1.0);
+        if var.sqrt() < tol { break; }
+
+        // Centroid of all but worst
+        let mut centroid = vec![0.0; n];
+        for i in 0..n { for j in 0..n { centroid[j] += simplex[i][j]; } }
+        for j in 0..n { centroid[j] /= n as f64; }
+
+        // Reflection
+        let mut xr = vec![0.0; n];
+        for j in 0..n { xr[j] = centroid[j] + alpha * (centroid[j] - simplex[n][j]); }
+        let fr = eval(&xr);
+        if fr < fvals[0] {
+            // Expansion
+            let mut xe = vec![0.0; n];
+            for j in 0..n { xe[j] = centroid[j] + gamma * (xr[j] - centroid[j]); }
+            let fe = eval(&xe);
+            if fe < fr { simplex[n] = xe; fvals[n] = fe; }
+            else { simplex[n] = xr; fvals[n] = fr; }
+        } else if fr < fvals[n - 1] {
+            simplex[n] = xr; fvals[n] = fr;
+        } else {
+            // Contraction
+            let mut xc = vec![0.0; n];
+            for j in 0..n { xc[j] = centroid[j] + rho * (simplex[n][j] - centroid[j]); }
+            let fc = eval(&xc);
+            if fc < fvals[n] { simplex[n] = xc; fvals[n] = fc; }
+            else {
+                // Shrink
+                for i in 1..(n + 1) {
+                    for j in 0..n { simplex[i][j] = simplex[0][j] + sigma * (simplex[i][j] - simplex[0][j]); }
+                    fvals[i] = eval(&simplex[i]);
+                }
+            }
+        }
+        iter += 1;
+    }
+
+    // Best point
+    let best_x = &simplex[0];
+    for (j, &idx) in optimize_idx.iter().enumerate() { params[idx] = best_x[j].max(0.0); }
+    params[6] = params[6].max(1e-12);
+    let best_sse = fvals[0];
+
+    let out = js_sys::Array::new_with_length(8);
+    for i in 0..7 { out.set(i as u32, JsValue::from_f64(params[i])); }
+    out.set(7, JsValue::from_f64(best_sse));
+    Float64Array::new(&out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
