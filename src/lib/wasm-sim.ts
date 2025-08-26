@@ -3,7 +3,8 @@
 
 import type { SimulationParams, SimulationState } from './precise-simulation';
 
-type WasmInitFn = (wasmUrl?: URL | string | Request | BufferSource) => Promise<unknown>;
+// Newer wasm-bindgen glue prefers an options object: { module_or_path: URL | Request | ... }
+type WasmInitFn = (options?: { module_or_path?: RequestInfo | URL | Response | BufferSource | WebAssembly.Module }) => Promise<unknown>;
 interface WasmModuleShape {
   default?: WasmInitFn;
   init?: WasmInitFn;
@@ -43,6 +44,44 @@ interface WasmModuleShape {
     dt: number,
     steps: number
   ) => Float64Array;
+  objective_sse?: (
+    e: number,
+    es: number,
+    ep: number,
+    s: number,
+    p: number,
+    tiempo: number,
+    ns: number,
+    np: number,
+    k1: number,
+    k_minus3: number,
+    k_minus1: number,
+    k2: number,
+    k_minus2: number,
+    k3: number,
+    dt: number,
+    times: Float64Array,
+    y_obs: Float64Array,
+    species_code: number
+  ) => number;
+  fit_nelder_mead?: (
+    e: number,
+    es: number,
+    ep: number,
+    s: number,
+    p: number,
+    tiempo: number,
+    ns: number,
+    np: number,
+    params_in: Float64Array, // [k1,k-3,k-1,k2,k-2,k3,dt]
+    mask: Uint8Array, // 1 => optimize
+    times: Float64Array,
+    y_obs: Float64Array,
+    species_code: number,
+    max_iter: number,
+    tol: number,
+    scale: number
+  ) => Float64Array;
 }
 
 let wasmMod: WasmModuleShape | null = null;
@@ -62,7 +101,7 @@ export async function initWasm(): Promise<boolean> {
         const init = (mod.default ?? mod.init) as WasmInitFn | undefined;
         if (init) {
           try {
-            await init(new URL('../wasm/enzyme_sim_bg.wasm', import.meta.url));
+            await init({ module_or_path: new URL('../wasm/enzyme_sim_bg.wasm', import.meta.url) });
           } catch (e) {
             // If init fails (e.g., stub throws), treat as not ready
             wasmMod = null;
@@ -217,4 +256,109 @@ export async function wasmSimulateStepsSeries(
     });
   }
   return out;
+}
+
+// Compute SSE objective in WASM by simulating and interpolating to arbitrary times
+export async function wasmObjectiveSSE(
+  current: NumericState,
+  params: ReturnType<typeof paramsToNumbers>,
+  times: number[],
+  yObs: number[],
+  species: 'S' | 'P' | 'E' | 'ES' | 'EP'
+): Promise<number | null> {
+  const ok = await initWasm();
+  if (!ok || !wasmMod || typeof wasmMod.objective_sse !== 'function') return null;
+  const tArr = new Float64Array(times);
+  const yArr = new Float64Array(yObs);
+  const code = species === 'S' ? 0 : species === 'P' ? 1 : species === 'E' ? 2 : species === 'ES' ? 3 : 4;
+  const v = wasmMod.objective_sse!(
+    current.E,
+    current.ES,
+    current.EP,
+    current.S,
+    current.P,
+    current.TIEMPO,
+    params.NS,
+    params.NP,
+    params.k1,
+    params.kMinus3,
+    params.kMinus1,
+    params.k2,
+    params.kMinus2,
+    params.k3,
+    params.dt,
+    tArr,
+    yArr,
+    code
+  ) as number;
+  return v;
+}
+
+export type WasmFitResult = {
+  k1: number;
+  kMinus3: number;
+  kMinus1: number;
+  k2: number;
+  kMinus2: number;
+  k3: number;
+  dt: number;
+  sse: number;
+};
+
+export async function wasmFitNelderMead(
+  current: NumericState,
+  params: ReturnType<typeof paramsToNumbers>,
+  times: number[],
+  yObs: number[],
+  species: 'S' | 'P' | 'E' | 'ES' | 'EP',
+  mask: [number, number, number, number, number, number, number],
+  opts?: { maxIter?: number; tol?: number; scale?: number }
+): Promise<WasmFitResult | null> {
+  const ok = await initWasm();
+  if (!ok || !wasmMod || typeof wasmMod.fit_nelder_mead !== 'function') return null;
+  const tArr = new Float64Array(times);
+  const yArr = new Float64Array(yObs);
+  const code = species === 'S' ? 0 : species === 'P' ? 1 : species === 'E' ? 2 : species === 'ES' ? 3 : 4;
+  const paramArr = new Float64Array([
+    params.k1,
+    params.kMinus3,
+    params.kMinus1,
+    params.k2,
+    params.kMinus2,
+    params.k3,
+    params.dt,
+  ]);
+  const maskArr = new Uint8Array(mask);
+  const maxIter = opts?.maxIter ?? 200;
+  const tol = opts?.tol ?? 1e-6;
+  const scale = opts?.scale ?? 0.1;
+  const out = wasmMod.fit_nelder_mead!(
+    current.E,
+    current.ES,
+    current.EP,
+    current.S,
+    current.P,
+    current.TIEMPO,
+    params.NS,
+    params.NP,
+    paramArr,
+    maskArr,
+    tArr,
+    yArr,
+    code,
+    maxIter,
+    tol,
+    scale
+  ) as Float64Array;
+  if (!out || out.length < 8) return null;
+  return {
+    k1: out[0],
+    kMinus3: out[1],
+    kMinus1: out[2],
+    k2: out[3],
+    kMinus2: out[4],
+    k3: out[5],
+    dt: out[6],
+    sse: out[7],
+  };
 }
