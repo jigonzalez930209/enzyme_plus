@@ -3,6 +3,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import HelpDialog from "./HelpDialog";
 import WindowControls from "./WindowControls";
 import logo from "../assets/logo.svg";
+// import FitDialog from "./content/FitDialog";
 
 const TitleBar: React.FC = () => {
   const isElectron =
@@ -10,6 +11,8 @@ const TitleBar: React.FC = () => {
     (!!(window as unknown as { electronAPI?: unknown }).electronAPI ||
       !!(window as unknown as { isElectron?: unknown }).isElectron ||
       /electron/i.test(navigator.userAgent));
+
+  // const [fitOpen, setFitOpen] = React.useState(false);
 
   return (
     <div className="flex items-center justify-between h-10 p-2 border-b select-none bg-muted drag-region">
@@ -30,25 +33,11 @@ const TitleBar: React.FC = () => {
           <div className="no-drag">
             <ThemeToggle />
           </div>
+          {/* <div className="no-drag">
+            <FitDialog open={fitOpen} setOpen={setFitOpen} />
+          </div> */}
         </nav>
       </div>
-      {/*<div className="flex items-center gap-1 text-muted-foreground">
-        <Button variant="ghost" size="icon" className="w-8 h-8">
-          <Settings size={18} />
-        </Button>
-        <Button variant="ghost" size="icon" className="w-8 h-8">
-          <LayoutGrid size={18} />
-        </Button>
-        <Button variant="ghost" size="icon" className="w-8 h-8">
-          <File size={18} />
-        </Button>
-        <Button variant="ghost" size="icon" className="w-8 h-8">
-          <ChevronsRightLeft size={18} />
-        </Button>
-        <Button variant="ghost" size="icon" className="w-8 h-8">
-          <AlignLeft size={18} />
-        </Button>
-      </div>*/}
       {isElectron && <WindowControls />}
     </div>
   );
